@@ -3,7 +3,7 @@ import random
 import find_blobs
 
 from skimage.filters import threshold_otsu
-from skimage.measure import label
+from skimage.measure import label, regionprops
 from skimage import morphology
 from pycromanager import Bridge
 
@@ -26,7 +26,8 @@ pixels = np.reshape(img.get_raw_pixels(), newshape=[img.get_height(), img.get_wi
 # find organelles using a combination of thresholding and watershed
 segmented = find_blobs.find_blobs(pixels, threshold_otsu(pixels), 500, 200)
 label_img = label(segmented)
-blobs = morphology.remove_small_objects(label_img, 5)
+label_img = morphology.remove_small_objects(label_img, 5)
+blobs = regionprops(label_img)
 
 # select two sizes, small and large.  Select those that are away from the border
 centered = find_blobs.select(blobs, 'centroid', img.get_width() / 10, 0.9 * img.get_width())
