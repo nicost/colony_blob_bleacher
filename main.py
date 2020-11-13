@@ -1,5 +1,6 @@
 import numpy as np
 import random
+import time
 import find_blobs
 
 from skimage.filters import threshold_otsu
@@ -13,6 +14,13 @@ mmc = bridge.get_core()
 mm = bridge.get_studio()
 projector = bridge.construct_java_object("org.micromanager.projector.ProjectorAPI")
 projector_device = projector.get_projection_device()
+
+# Note: to use napari as a viewer, start the QT event loop using the IPython magic command:
+# %gui qt5
+# then, start napari:
+# import naparai
+# viewer = napari.Viewer()
+# viewer.add_image(Pixels)
 
 # get first image from active dataviewer
 dv = mm.displays().get_active_data_viewer()
@@ -35,13 +43,22 @@ small = find_blobs.select(centered, 'area', 5, 45)
 large = find_blobs.select(centered, 'area', 90, 600)
 
 # for each, select up to 10, but no more than half of the spots, and send them to SLM
-nr = 10
+nr = 20
+projector.enable_point_and_shoot_mode(True)
+mm.acquisitions().run_acquisition_nonblocking()
+# Trick to get timing right.  Wait for Core to report that Sequence is running
+while not mmc.is_sequence_running(mmc.get_camera_device()):
+    time.sleep(0.1)
 for region_list in [small, large]:
     nr_shots = nr if len(region_list) >= 2 * nr else len(region_list) / 2
     shots = random.sample(region_list, nr_shots)
+    # shots = region_list[0:10]
     for shot in shots:
-        projector.display_spot(projector_device, shot['centroid'][0], shot['centroid'][1])
+        projector.add_point_to_point_and_shoot_queue(shot['centroid'][1], shot['centroid'][0])
+        # print(shot['centroid'][0], " ", shot['centroid'][1])
+        time.sleep(0.05)
     print("Shots ", len(shots))
+
 
 
 
