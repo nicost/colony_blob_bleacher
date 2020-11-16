@@ -20,7 +20,7 @@ projector_device = projector.get_projection_device()
 # then, start napari:
 # import naparai
 # viewer = napari.Viewer()
-# viewer.add_image(Pixels)
+# viewer.add_image(pixels)
 
 # get first image from active dataviewer
 dv = mm.displays().get_active_data_viewer()
@@ -50,14 +50,16 @@ mm.acquisitions().run_acquisition_nonblocking()
 while not mmc.is_sequence_running(mmc.get_camera_device()):
     time.sleep(0.1)
 for region_list in [small, large]:
-    nr_shots = nr if len(region_list) >= 2 * nr else len(region_list) / 2
+    nr_shots = nr if len(region_list) >= 2 * nr else int(len(region_list) / 2)
     shots = random.sample(region_list, nr_shots)
     # shots = region_list[0:10]
     for shot in shots:
+        # Note that MM has x-y coordinates, and Python uses row-column (equivalent to y-x)
         projector.add_point_to_point_and_shoot_queue(shot['centroid'][1], shot['centroid'][0])
-        # print(shot['centroid'][0], " ", shot['centroid'][1])
-        time.sleep(0.05)
+        # print(shot['centroid'][1], " ", shot['centroid'][0])
+        time.sleep(0.07)
     print("Shots ", len(shots))
+    time.sleep(1)
 
 
 
