@@ -23,6 +23,12 @@ projector_device = projector.get_projection_device()
 # viewer.add_image(pixels)
 
 # get first image from active dataviewer
+#pos_list = mm.get_position_list()
+
+#for i in np.arange(pos_list.get_number_of_positions()):
+#    multi-stage_position = pos_list.get_position(i.item())
+
+#mm.live().snap(True)
 dv = mm.displays().get_active_data_viewer()
 ds = dv.get_datastore()
 cb = mm.data().get_coords_builder()
@@ -49,8 +55,9 @@ mm.acquisitions().run_acquisition_nonblocking()
 # Trick to get timing right.  Wait for Core to report that Sequence is running
 while not mmc.is_sequence_running(mmc.get_camera_device()):
     time.sleep(0.1)
+time.sleep(0.5)
 for region_list in [small, large]:
-    nr_shots = nr if len(region_list) >= 2 * nr else int(len(region_list) / 2)
+    nr_shots = nr if len(region_list) >= (2 * nr) else int(len(region_list) / 2)
     shots = random.sample(region_list, nr_shots)
     # shots = region_list[0:10]
     for shot in shots:
