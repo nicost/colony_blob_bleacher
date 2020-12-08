@@ -1,0 +1,10 @@
+name: blob_bleacher
+channels:
+  - defaults
+dependencies:
+  - python=3.7
+  - napari
+  - pyqt
+  - jupyterlab
+  - jupyter
+prefix: C:\Users\NicoLocal\anaconda3\envs\napari
