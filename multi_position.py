@@ -22,10 +22,11 @@ projector_device = projector.get_projection_device()
 pm = mm.positions()
 pos_list = pm.get_position_list()
 
-for idx in range(pos_list.get_number_of_postions()):
+for idx in range(pos_list.get_number_of_positions()):
     pos = pos_list.get_position(idx)
     pos.go_to_position(pos, mmc)
-    img = mm.live().snap(False)
+    time.sleep(0.1)
+    img = mm.live().snap(False).get(0)
     pixels = np.reshape(img.get_raw_pixels(), newshape=[img.get_height(), img.get_width()])
     # find organelles using a combination of thresholding and watershed
     segmented = find_blobs.find_blobs(pixels, threshold_otsu(pixels), 500, 200)
@@ -51,5 +52,7 @@ for idx in range(pos_list.get_number_of_postions()):
             # print(shot['centroid'][1], " ", shot['centroid'][0])
             time.sleep(0.07)
         print("Shots ", len(shots))
+        while mmc.is_sequence_running(mmc.get_camera_device()):
+            time.sleep(0.5)
         time.sleep(1)
 
