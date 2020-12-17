@@ -57,7 +57,7 @@ for idx in range(pos_list.get_number_of_positions()):
             projector.add_point_to_point_and_shoot_queue(shot['centroid'][1], shot['centroid'][0])
             # print(shot['centroid'][1], " ", shot['centroid'][0])
             time.sleep(0.07)
-        print("Shots ", len(shots))
+        print(pos.get_label(), ": Shots ", len(shots))
         while mmc.is_sequence_running(mmc.get_camera_device()):
             time.sleep(0.5)
         time.sleep(1)
