@@ -21,8 +21,11 @@ projector_device = projector.get_projection_device()
 # Be ready for when this gets fixed
 pm = mm.positions()
 pos_list = pm.get_position_list()
+ds = mm.data().create_ram_datastore()
 
 for idx in range(pos_list.get_number_of_positions()):
+    # Close DataViewer opened during previous run
+    dv = mm.displays().close_displays_for(ds)
     pos = pos_list.get_position(idx)
     pos.go_to_position(pos, mmc)
     time.sleep(0.1)
@@ -37,11 +40,14 @@ for idx in range(pos_list.get_number_of_positions()):
     
     nr = 20
     projector.enable_point_and_shoot_mode(True)
-    mm.acquisitions().run_acquisition_nonblocking()
+    ssb = mm.acquisitions().get_acquisition_settings().copy_builder()
+    mm.acquisitions().set_acquisition_settings(ssb.prefix(pos.get_label()).build())
+    ds = mm.acquisitions().run_acquisition_nonblocking()
     # Trick to get timing right.  Wait for Core to report that Sequence is running
     while not mmc.is_sequence_running(mmc.get_camera_device()):
         time.sleep(0.1)
     time.sleep(0.5)
+
     for region_list in [centered]:
         nr_shots = nr if len(region_list) >= (2 * nr) else int(len(region_list) / 2)
         shots = random.sample(region_list, nr_shots)
@@ -56,3 +62,4 @@ for idx in range(pos_list.get_number_of_positions()):
             time.sleep(0.5)
         time.sleep(1)
 
+print("Done!")
