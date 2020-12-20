@@ -38,8 +38,8 @@ red_woBg = Colormap([[0.0, 0.0, 0.0, 0.0], [1.0, 0.0, 0.0, 1.0]])
 cmap_winter = cm.get_cmap('winter')
 
 # data source
-data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/TestedData/data20201116/AutoBleach_15"
-
+#data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/TestedData/data20201116/AutoBleach_15"
+data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/TestedData/20201216/Ctrl-2DG-CCCP-36pos_partial/exp_110"
 
 
 # build up pycromanager bridge
@@ -119,12 +119,14 @@ def analysis_mask(img_example,num_dilation,listx,listy):
 # create analysis mask for filtered bleach points
 bleachpoints = analysis_mask(test1_pix, dilation_round, pointer_filtered[2].tolist(), pointer_filtered[1].tolist())
 label_bleachpoints = label(bleachpoints)
+bleachpoints_prop = regionprops(label_bleachpoints)
 
 # create analysis mask for control points
 ctrlpoints_x = nucleoli_pd[~nucleoli_pd.index.isin(pointer['nucleoli'].tolist())]['centroid_x'].astype(int).tolist()
 ctrlpoints_y = nucleoli_pd[~nucleoli_pd.index.isin(pointer['nucleoli'].tolist())]['centroid_y'].astype(int).tolist()
 ctrlpoints = analysis_mask(test1_pix, dilation_round, ctrlpoints_x, ctrlpoints_y)
 label_ctrlpoints = label(ctrlpoints)
+ctrlpoints_prop = regionprops(label_ctrlpoints)
 
 # link pointer with corresponding bleachpoints
 pointer_in_bleachpoints = []
@@ -138,8 +140,8 @@ pointer_sort = pointer_filtered.sort_values(by='size').reset_index()   # from sm
 # create stack for time series
 t_pixels = []
 # measure mean intensity for bleach points and control points
-t_meanInt_bleachpoints = [[] for _ in range(len(pointer_filtered))]
-t_meanInt_ctrlpoints = [[] for _ in range(len(ctrlpoints_x))]
+t_meanInt_bleachpoints = [[] for _ in range(len(bleachpoints_prop))]
+t_meanInt_ctrlpoints = [[] for _ in range(len(ctrlpoints_prop))]
 for t in range(0, max_t):
     img = store.get_image(cb.t(t).build())
     pixels = np.reshape(img.get_raw_pixels(), newshape=[img.get_height(), img.get_width()])
@@ -192,11 +194,13 @@ with napari.gui_qt():
     # display control points
     #viewer.add_image(ctrlpoints, name='ctrl points', colormap=('red woBg',red_woBg))
 
-    # display point_and_shoot points
+    # display point_and_shoot aim points
     # create points for bleach points
-    # points = np.column_stack((log[2].tolist(), log[1].tolist()))
-    # size = [3]*len(points)
-    #bleach_point = viewer.add_points([140,107], name='test points', size=[3], edge_color='r', face_color='r')
+    points = np.column_stack((pointer[2].tolist(), pointer[1].tolist()))
+    size = [3]*len(points)
+    viewer.add_points(points, name='aim points', size=size, edge_color='r', face_color='r')
+
+    # display filtered bleach points
     viewer.add_image(label_bleachpoints, name='bleach points', colormap=('winter woBg',winter_woBg))
 
     # plot FRAP curves of bleach points (photobleaching corrected)
