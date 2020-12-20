@@ -29,6 +29,13 @@ import collections
 
 
 
+# nomenclature notes
+# aim points: all shoot points retrieve from .log file
+# bleach points: filtered aim points
+#       filters: 1) aim points that are too close (merge together when generating analysis mask)
+
+
+
 # constant values
 dilation_round = 3  # analysis size of the bleach points
 
@@ -39,7 +46,8 @@ cmap_winter = cm.get_cmap('winter')
 
 # data source
 #data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/TestedData/data20201116/AutoBleach_15"
-data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/TestedData/20201216/Ctrl-2DG-CCCP-36pos_partial/exp_110"
+data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/TestedData/20201216/Ctrl-2DG-CCCP-36pos_partial/exp_109"
+
 
 
 # build up pycromanager bridge
@@ -60,30 +68,28 @@ test1_pix = np.reshape(test1.get_raw_pixels(), newshape=[test1.get_height(), tes
 
 # image analysis based on image of time 0
 # find organelles using a combination of thresholding and watershed
-segmented = find_blobs.find_blobs(test1_pix, threshold_otsu(test1_pix), 500, 200)
+nucleoli = find_blobs.find_blobs(test1_pix, threshold_otsu(test1_pix), 500, 200)
 # remove artifacts connected to image border and nucleoli less than 5
-segmented_filtered = morphology.remove_small_objects(segmentation.clear_border(segmented), 5)
-label_img = label(segmented_filtered)
-nucleoli = regionprops(label_img)
+nucleoli_filtered = morphology.remove_small_objects(segmentation.clear_border(nucleoli), 5)
+label_nucleoli_filtered = label(nucleoli_filtered)
+nucleoli_prop = regionprops(label_nucleoli_filtered)
 # get the size of each nucleoli
-label_areas = np.bincount(label_img.ravel())[1:]
+nucleoli_areas = np.bincount(label_nucleoli_filtered.ravel())[1:]
 # get the centroid of each nucleoli
-label_centroid_x = []
-label_centroid_y = []
-for i in range(len(nucleoli)):
-    label_centroid_x.append(nucleoli[i].centroid[0])
-    label_centroid_y.append(nucleoli[i].centroid[1])
+nucleoli_centroid_x = []
+nucleoli_centroid_y = []
+for i in range(len(nucleoli_prop)):
+    nucleoli_centroid_x.append(nucleoli_prop[i].centroid[0])
+    nucleoli_centroid_y.append(nucleoli_prop[i].centroid[1])
 
-label_properties = {
-    'size': ['none'] + list(label_areas),  # background is size: none
-    }
-
+# nucleoli labels
+nucleoli_properties = {'size': ['none'] + list(nucleoli_areas)}  # background is size: none
 
 # nucleoli dataset
 nucleoli_pd = pd.DataFrame()
-nucleoli_pd['size'] = label_areas
-nucleoli_pd['centroid_x'] = label_centroid_x
-nucleoli_pd['centroid_y'] = label_centroid_y
+nucleoli_pd['size'] = nucleoli_areas
+nucleoli_pd['centroid_x'] = nucleoli_centroid_x
+nucleoli_pd['centroid_y'] = nucleoli_centroid_y
 
 # load point_and_shoot log file
 pointer = pd.read_csv('%s/PointAndShoot.log'%data_path,na_values=['.'],sep='\t', header = None)
@@ -91,19 +97,8 @@ pointer = pd.read_csv('%s/PointAndShoot.log'%data_path,na_values=['.'],sep='\t',
 # link pointer with corresponding nucleoli
 pointer_in_nucleoli = []
 for i in range(len(pointer)):
-    pointer_in_nucleoli.append(label_img[pointer[2][i],pointer[1][i]]-1)
+    pointer_in_nucleoli.append(label_nucleoli_filtered[pointer[2][i], pointer[1][i]] - 1)
 pointer['nucleoli'] = pointer_in_nucleoli
-pointer_target_same_nucleoli = [item for item, count in collections.Counter(pointer['nucleoli'].tolist()).items() if count > 1]
-# filter out bleach points:
-# 1) aim outside of nucleoli
-# 2) bleach the same nucleoli
-pointer_filtered = pointer[(pointer['nucleoli'] > 0) & (~pointer['nucleoli'].isin(pointer_target_same_nucleoli))].reset_index()
-
-# measure pointer corresponding nucleoli sizes
-pointer_nucleoli_sizes = []
-for i in range(len(pointer_filtered)):
-    pointer_nucleoli_sizes.append(nucleoli_pd['size'][pointer_filtered['nucleoli'][i]])
-pointer_filtered['size'] = pointer_nucleoli_sizes
 
 def analysis_mask(img_example,num_dilation,listx,listy):
     mask = np.zeros_like(img_example)
@@ -116,10 +111,10 @@ def analysis_mask(img_example,num_dilation,listx,listy):
         print("Input error: length of x and y does not match")
     return mask
 
-# create analysis mask for filtered bleach points
-bleachpoints = analysis_mask(test1_pix, dilation_round, pointer_filtered[2].tolist(), pointer_filtered[1].tolist())
-label_bleachpoints = label(bleachpoints)
-bleachpoints_prop = regionprops(label_bleachpoints)
+# create analysis mask for all aim points
+aimpoints = analysis_mask(test1_pix, dilation_round, pointer[2].tolist(), pointer[1].tolist())
+label_aimpoints = label(aimpoints)
+aimpoints_prop = regionprops(label_aimpoints)
 
 # create analysis mask for control points
 ctrlpoints_x = nucleoli_pd[~nucleoli_pd.index.isin(pointer['nucleoli'].tolist())]['centroid_x'].astype(int).tolist()
@@ -128,11 +123,37 @@ ctrlpoints = analysis_mask(test1_pix, dilation_round, ctrlpoints_x, ctrlpoints_y
 label_ctrlpoints = label(ctrlpoints)
 ctrlpoints_prop = regionprops(label_ctrlpoints)
 
+# link pointer with corresponding aim points
+pointer_in_aimpoints = []
+for i in range(len(pointer)):
+    pointer_in_aimpoints.append(label_aimpoints[pointer[2][i], pointer[1][i]] - 1)
+pointer['aimpoints'] = pointer_in_aimpoints
+
+# filter out bleach points:
+# 1) aim outside of nucleoli
+# 2) bleach the same nucleoli
+# 3) too close to merge as a single bleach points
+pointer_target_same_nucleoli = [item for item, count in collections.Counter(pointer['nucleoli'].tolist()).items() if count > 1]
+pointer_merge_in_same_aimpoints = [item for item, count in collections.Counter(pointer['aimpoints'].tolist()).items() if count > 1]
+pointer_filtered = pointer[(pointer['nucleoli'] > 0)
+                           & (~pointer['nucleoli'].isin(pointer_target_same_nucleoli))
+                           & (~pointer['aimpoints'].isin(pointer_merge_in_same_aimpoints))].reset_index()
+
+# create analysis mask for filtered aim points, i.e. bleach points
+bleachpoints = analysis_mask(test1_pix, dilation_round, pointer_filtered[2].tolist(), pointer_filtered[1].tolist())
+label_bleachpoints = label(bleachpoints)
+
 # link pointer with corresponding bleachpoints
 pointer_in_bleachpoints = []
 for i in range(len(pointer_filtered)):
-    pointer_in_bleachpoints.append(label_bleachpoints[pointer_filtered[2][i],pointer_filtered[1][i]]-1)
+    pointer_in_bleachpoints.append(label_bleachpoints[pointer_filtered[2][i], pointer_filtered[1][i]] - 1)
 pointer_filtered['bleachpoints'] = pointer_in_bleachpoints
+
+# measure pointer corresponding nucleoli sizes
+pointer_nucleoli_sizes = []
+for i in range(len(pointer_filtered)):
+    pointer_nucleoli_sizes.append(nucleoli_pd['size'][pointer_filtered['nucleoli'][i]])
+pointer_filtered['size'] = pointer_nucleoli_sizes
 
 # sort pointer for plotting
 pointer_sort = pointer_filtered.sort_values(by='size').reset_index()   # from small to large
@@ -140,7 +161,7 @@ pointer_sort = pointer_filtered.sort_values(by='size').reset_index()   # from sm
 # create stack for time series
 t_pixels = []
 # measure mean intensity for bleach points and control points
-t_meanInt_bleachpoints = [[] for _ in range(len(bleachpoints_prop))]
+t_meanInt_bleachpoints = [[] for _ in range(len(pointer_filtered))]
 t_meanInt_ctrlpoints = [[] for _ in range(len(ctrlpoints_prop))]
 for t in range(0, max_t):
     img = store.get_image(cb.t(t).build())
@@ -180,8 +201,8 @@ with napari.gui_qt():
     viewer.add_image(movies, name='data')
 
     # display nucleoli mask
-    label_layer = viewer.add_labels(label_img, name='nucleoli label', properties=label_properties, num_colors=3)
-    viewer.add_image(segmented_filtered, name='nucleoli', contrast_limits=[0,1], colormap=('dark violetred woBg',dark_violetred_woBg))
+    label_layer = viewer.add_labels(label_nucleoli_filtered, name='nucleoli label', properties=nucleoli_properties, num_colors=3)
+    viewer.add_image(nucleoli_filtered, name='nucleoli', contrast_limits=[0, 1], colormap=('dark violetred woBg', dark_violetred_woBg))
 
     # generate colormap based on the number of bleach points
     rgba_winter = cmap_winter(np.arange(0, 1, 1 / len(pointer_filtered)))
@@ -201,7 +222,7 @@ with napari.gui_qt():
     viewer.add_points(points, name='aim points', size=size, edge_color='r', face_color='r')
 
     # display filtered bleach points
-    viewer.add_image(label_bleachpoints, name='bleach points', colormap=('winter woBg',winter_woBg))
+    viewer.add_image(label_bleachpoints, name='bleach points', colormap=('winter woBg', winter_woBg))
 
     # plot FRAP curves of bleach points (photobleaching corrected)
     for i in range(len(t_meanInt_bleachpoints_pbcorrected)):
