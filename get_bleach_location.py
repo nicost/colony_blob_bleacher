@@ -14,11 +14,7 @@ mm = bridge.get_studio()
 projector = bridge.construct_java_object("org.micromanager.projector.ProjectorAPI")
 projector_device = projector.get_projection_device()
 
-
 p_exposure = projector_device.get_exposure()
-
-img = mm.live().snap(False).get(0)
-pixels = np.reshape(img.get_raw_pixels(), newshape=[img.get_height(), img.get_width()])
 
 img = mm.live().snap(False).get(0)
 pixels = np.reshape(img.get_raw_pixels(), newshape=[img.get_height(), img.get_width()])
