@@ -6,7 +6,7 @@ from pycromanager import Bridge
 from skimage.filters import threshold_otsu
 from skimage.measure import label, regionprops
 from skimage import morphology
-import find_blobs
+from shared.find_blobs import find_blobs, select
 
 # build up pycromanager bridge
 bridge = Bridge()
@@ -15,10 +15,8 @@ mm = bridge.get_studio()
 projector = bridge.construct_java_object("org.micromanager.projector.ProjectorAPI")
 projector_device = projector.get_projection_device()
 
-#TODO We may want to configure the acquisition settings to ensure they are what we want
+# TODO We may want to configure the acquisition settings to ensure they are what we want
 
-# Note currently, pm and mm are the same object, and both have the positionlistmanager methods
-# Be ready for when this gets fixed
 pm = mm.positions()
 pos_list = pm.get_position_list()
 ds = mm.data().create_ram_datastore()
@@ -32,11 +30,11 @@ for idx in range(pos_list.get_number_of_positions()):
     img = mm.live().snap(False).get(0)
     pixels = np.reshape(img.get_raw_pixels(), newshape=[img.get_height(), img.get_width()])
     # find organelles using a combination of thresholding and watershed
-    segmented = find_blobs.find_blobs(pixels, threshold_otsu(pixels), 500, 200)
+    segmented = find_blobs(pixels, threshold_otsu(pixels), 500, 200)
     label_img = label(segmented)
     label_img = morphology.remove_small_objects(label_img, 5)
     blobs = regionprops(label_img)
-    centered = find_blobs.select(blobs, 'centroid', img.get_width() / 10, 0.9 * img.get_width())
+    centered = select(blobs, 'centroid', img.get_width() / 10, 0.9 * img.get_width())
     
     nr = 20
     projector.enable_point_and_shoot_mode(True)

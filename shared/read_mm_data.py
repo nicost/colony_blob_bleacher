@@ -5,7 +5,7 @@ from skimage.measure import label, regionprops
 from skimage import morphology
 
 from pycromanager import Bridge
-import find_blobs
+from shared.find_blobs import find_blobs
 """
     Example code showing how to read Micro-Manager data using the pycro-manager bridge.
     ALso reads the date/time stamp from the image metadata and runs the analysis
@@ -30,7 +30,7 @@ for t in range(0, max_t):
     pixels = np.reshape(img.get_raw_pixels(), newshape=[img.get_height(), img.get_width()])
 
     # find organelles using a combination of thresholding and watershed
-    segmented = find_blobs.find_blobs(pixels, threshold_otsu(pixels), 500, 200)
+    segmented = find_blobs(pixels, threshold_otsu(pixels), 500, 200)
     label_img = label(segmented)
     label_img = morphology.remove_small_objects(label_img, 5)
     blobs = regionprops(label_img)

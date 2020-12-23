@@ -21,7 +21,7 @@ from skimage.measure import label, regionprops
 from skimage import morphology, segmentation
 
 # .py
-import find_blobs
+from shared.find_blobs import find_blobs
 
 # others
 from vispy.color import Colormap
@@ -30,7 +30,7 @@ import collections
 
 
 # nomenclature notes
-# aim points: all shoot points retrieve from .log file
+# aim points: all shoot points retrieved from .log file
 # bleach points: filtered aim points
 #       filters: 1) aim points that are too close (merge together when generating analysis mask)
 
@@ -45,7 +45,7 @@ red_woBg = Colormap([[0.0, 0.0, 0.0, 0.0], [1.0, 0.0, 0.0, 1.0]])
 cmap_winter = cm.get_cmap('winter')
 
 # data source
-#data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/TestedData/data20201116/AutoBleach_15"
+# data_path = "C:\\Users\\NicoLocal\\Images\\Jess\\20201116-Nucleoili-bleaching-4x\\PythonAcq1\\AutoBleach_15"
 data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/TestedData/20201216/Ctrl-2DG-CCCP-36pos_partial/exp_109"
 
 
@@ -68,7 +68,7 @@ test1_pix = np.reshape(test1.get_raw_pixels(), newshape=[test1.get_height(), tes
 
 # image analysis based on image of time 0
 # find organelles using a combination of thresholding and watershed
-nucleoli = find_blobs.find_blobs(test1_pix, threshold_otsu(test1_pix), 500, 200)
+nucleoli = find_blobs(test1_pix, threshold_otsu(test1_pix), 500, 200)
 # remove artifacts connected to image border and nucleoli less than 5
 nucleoli_filtered = morphology.remove_small_objects(segmentation.clear_border(nucleoli), 5)
 label_nucleoli_filtered = label(nucleoli_filtered)
@@ -100,6 +100,7 @@ for i in range(len(pointer)):
     pointer_in_nucleoli.append(label_nucleoli_filtered[pointer[2][i], pointer[1][i]] - 1)
 pointer['nucleoli'] = pointer_in_nucleoli
 
+
 def analysis_mask(img_example,num_dilation,listx,listy):
     mask = np.zeros_like(img_example)
     if len(listx) == len(listy):
@@ -110,6 +111,7 @@ def analysis_mask(img_example,num_dilation,listx,listy):
     else:
         print("Input error: length of x and y does not match")
     return mask
+
 
 # create analysis mask for all aim points
 aimpoints = analysis_mask(test1_pix, dilation_round, pointer[2].tolist(), pointer[1].tolist())
