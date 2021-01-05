@@ -20,7 +20,7 @@ projector_device = projector.get_projection_device()
 # Note: to use napari as a viewer, start the QT event loop using the IPython magic command:
 # %gui qt5
 # then, start napari:
-# import naparai
+# import napari
 # viewer = napari.Viewer()
 # viewer.add_image(pixels)
 
