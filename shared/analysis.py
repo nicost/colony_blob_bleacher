@@ -8,8 +8,8 @@ from skimage.morphology import disk
 DEFAULT = object()
 def bleach_location(pre_pixels: np.array,
                     post_pixels: np.array,
-                    expected_position = DEFAULT,
-                    half_roi_size = DEFAULT):
+                    expected_position : List[int] = DEFAULT,
+                    half_roi_size : List[int] = DEFAULT):
     """
     Finds the location of a bright spot in the post_pixels image
     The pre_pixel image will be subtracted from the pos_pixel image (after adding
