@@ -38,6 +38,8 @@ import collections
 
 # constant values
 dilation_round = 3  # analysis size of the bleach points
+x_shift = 0   # positive: right
+y_shift = 0   # positive: up
 
 # colormaps
 dark_violetred_woBg = Colormap([[0.0, 0.0, 0.0, 0.0], [129/255, 55/255, 114/255, 1.0]])
@@ -46,7 +48,7 @@ cmap_winter = cm.get_cmap('winter')
 
 # data source
 # data_path = "C:\\Users\\NicoLocal\\Images\\Jess\\20201116-Nucleoili-bleaching-4x\\PythonAcq1\\AutoBleach_15"
-data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/TestedData/20201216/Ctrl-2DG-CCCP-36pos_partial/exp_109"
+data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/TestedData/20201216/Ctrl-2DG-CCCP-36pos_partial/exp_130"
 
 
 
@@ -93,6 +95,10 @@ nucleoli_pd['centroid_y'] = nucleoli_centroid_y
 
 # load point_and_shoot log file
 pointer = pd.read_csv('%s/PointAndShoot.log'%data_path,na_values=['.'],sep='\t', header = None)
+pointer['aim_x'] = pointer[1]
+pointer['aim_y'] = pointer[2]
+pointer[1] = pointer[1] + x_shift
+pointer[2] = pointer[2] - y_shift
 
 # link pointer with corresponding nucleoli
 pointer_in_nucleoli = []
@@ -219,7 +225,7 @@ with napari.gui_qt():
 
     # display point_and_shoot aim points
     # create points for bleach points
-    points = np.column_stack((pointer[2].tolist(), pointer[1].tolist()))
+    points = np.column_stack((pointer['aim_y'].tolist(), pointer['aim_x'].tolist()))
     size = [3]*len(points)
     viewer.add_points(points, name='aim points', size=size, edge_color='r', face_color='r')
 
