@@ -7,6 +7,9 @@ from skimage.measure import label, regionprops
 from skimage import morphology
 from shared.find_blobs import find_blobs, select
 
+# variables
+nr = 40
+
 # build up pycromanager bridge
 bridge = Bridge()
 mmc = bridge.get_core()
@@ -34,9 +37,8 @@ for idx in range(pos_list.get_number_of_positions()):
     label_img = morphology.remove_small_objects(label_img, 5)
     blobs = regionprops(label_img)
     centered = select(blobs, 'centroid', img.get_width() / 10, 0.9 * img.get_width())
-    nr = 20
 
-    if len(centered) > nr // 2:
+    if len(centered) > nr // 4:
         projector.enable_point_and_shoot_mode(True)
         ssb = mm.acquisitions().get_acquisition_settings().copy_builder()
         mm.acquisitions().set_acquisition_settings(ssb.prefix(pos.get_label()).build())
