@@ -1,8 +1,9 @@
 import numpy as np
 
 from pycromanager import Bridge
-
 from shared.analysis import bleach_location, central_pixel_without_cells
+
+exposure = 200
 
 print("Hello")
 
@@ -13,12 +14,15 @@ mm = bridge.get_studio()
 projector = bridge.construct_java_object("org.micromanager.projector.ProjectorAPI")
 projector_device = projector.get_projection_device()
 p_exposure = projector_device.get_exposure()
+c_exposure = mmc.get_exposure();
 test_img = mm.live().snap(True).get(0)
 test_np_img = np.reshape(test_img.get_raw_pixels(), newshape=[test_img.get_height(), test_img.get_width()])
 location = central_pixel_without_cells(test_np_img)
 if location:
     auto_shutter = mm.shutter().get_auto_shutter()
     mm.shutter().set_auto_shutter(False)
+    projector.set_exposure(projector_device, exposure)
+    mmc.set_exposure(exposure)
     projector.enable_point_and_shoot_mode(True)
     pre_img = mm.live().snap(True).get(0)
     pre_np_img = np.reshape(pre_img.get_raw_pixels(), newshape=[pre_img.get_height(), pre_img.get_width()])
@@ -27,6 +31,8 @@ if location:
     post_np_img = np.reshape(post_img.get_raw_pixels(), newshape=[post_img.get_height(), post_img.get_width()])
     measured_location = bleach_location(pre_np_img, post_np_img, location, [100, 100])
     offset = (measured_location[0] - location[0], measured_location[1] - location[1])
+    projector.set_exposure(projector_device, p_exposure)
+    mmc.set_exposure(c_exposure)
     mm.shutter().set_auto_shutter(auto_shutter)
     print(location)
     print(measured_location)
