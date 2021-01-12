@@ -16,7 +16,7 @@ from matplotlib.figure import Figure
 from matplotlib import cm
 
 # skimage
-from skimage.filters import threshold_otsu
+from skimage.filters import threshold_yen
 from skimage.measure import label, regionprops
 from skimage import morphology, segmentation
 
@@ -48,7 +48,7 @@ cmap_winter = cm.get_cmap('winter')
 
 # data source
 # data_path = "C:\\Users\\NicoLocal\\Images\\Jess\\20201116-Nucleoili-bleaching-4x\\PythonAcq1\\AutoBleach_15"
-data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/TestedData/20201216/Ctrl-2DG-CCCP-36pos_partial/exp_130"
+data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/TestedData/20201216/Ctrl-2DG-CCCP-36pos_partial/exp_37"
 
 
 
@@ -70,7 +70,7 @@ test1_pix = np.reshape(test1.get_raw_pixels(), newshape=[test1.get_height(), tes
 
 # image analysis based on image of time 0
 # find organelles using a combination of thresholding and watershed
-nucleoli = find_blobs(test1_pix, threshold_otsu(test1_pix), 500, 200)
+nucleoli = find_blobs(test1_pix, threshold_yen(test1_pix), 500, 200)
 # remove artifacts connected to image border and nucleoli less than 5
 nucleoli_filtered = morphology.remove_small_objects(segmentation.clear_border(nucleoli), 5)
 label_nucleoli_filtered = label(nucleoli_filtered)
