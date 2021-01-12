@@ -16,12 +16,13 @@ from matplotlib.figure import Figure
 from matplotlib import cm
 
 # skimage
-from skimage.filters import threshold_yen
+from skimage.filters import threshold_otsu, threshold_yen
 from skimage.measure import label, regionprops
 from skimage import morphology, segmentation
 
 # .py
 from shared.find_blobs import find_blobs
+#from shared.remove_large_objects import remove_large_objects
 
 # others
 from vispy.color import Colormap
@@ -37,9 +38,10 @@ import collections
 
 
 # constant values
-dilation_round = 3  # analysis size of the bleach points
-x_shift = 0   # positive: right
-y_shift = 0   # positive: up
+global_thresholding = 'na' # choose in between 'na','otsu' and 'yen' default = 'na'
+dilation_round = 3  # analysis size of the bleach points; default = 3
+x_shift = 0   # positive: right; default = 0
+y_shift = 0   # positive: up; default = 0
 
 # colormaps
 dark_violetred_woBg = Colormap([[0.0, 0.0, 0.0, 0.0], [129/255, 55/255, 114/255, 1.0]])
@@ -48,7 +50,8 @@ cmap_winter = cm.get_cmap('winter')
 
 # data source
 # data_path = "C:\\Users\\NicoLocal\\Images\\Jess\\20201116-Nucleoili-bleaching-4x\\PythonAcq1\\AutoBleach_15"
-data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/TestedData/20201216/Ctrl-2DG-CCCP-36pos_partial/exp_37"
+# data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/TestedData/20201216/Ctrl-2DG-CCCP-36pos_partial/exp_110"
+data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/TestedData/20210109/B3-Site_0_1"
 
 
 
@@ -70,9 +73,16 @@ test1_pix = np.reshape(test1.get_raw_pixels(), newshape=[test1.get_height(), tes
 
 # image analysis based on image of time 0
 # find organelles using a combination of thresholding and watershed
-nucleoli = find_blobs(test1_pix, threshold_yen(test1_pix), 500, 200)
+if global_thresholding == 'na':
+    nucleoli = find_blobs(test1_pix, 0, 500, 200)
+elif global_thresholding == 'otsu':
+    nucleoli = find_blobs(test1_pix, threshold_otsu(test1_pix), 500, 200)
+elif global_thresholding == 'yen':
+    nucleoli = find_blobs(test1_pix, threshold_yen(test1_pix), 500, 200)
+
 # remove artifacts connected to image border and nucleoli less than 5
 nucleoli_filtered = morphology.remove_small_objects(segmentation.clear_border(nucleoli), 5)
+#nucleoli_filtered = remove_large_objects(nucleoli_filtered, 500)
 label_nucleoli_filtered = label(nucleoli_filtered)
 nucleoli_prop = regionprops(label_nucleoli_filtered)
 # get the size of each nucleoli
@@ -213,12 +223,15 @@ with napari.gui_qt():
     viewer.add_image(nucleoli_filtered, name='nucleoli', contrast_limits=[0, 1], colormap=('dark violetred woBg', dark_violetred_woBg))
 
     # generate colormap based on the number of bleach points
-    rgba_winter = cmap_winter(np.arange(0, 1, 1 / len(pointer_filtered)))
-    rgba_winter_woBg = np.insert(rgba_winter, 0, [0.0, 0.0, 0.0, 0.0], axis=0)
-    rgba_winter_sort = [rgba_winter_woBg[0]]
-    for i in pointer_sort.sort_values(by='bleachpoints').index.tolist():
-        rgba_winter_sort.append(rgba_winter_woBg[i + 1])
-    winter_woBg = Colormap(rgba_winter_sort)
+    if len(pointer_filtered) != 0:
+        rgba_winter = cmap_winter(np.arange(0, 1, 1 / len(pointer_filtered)))
+        rgba_winter_woBg = np.insert(rgba_winter, 0, [0.0, 0.0, 0.0, 0.0], axis=0)
+        rgba_winter_sort = [rgba_winter_woBg[0]]
+        for i in pointer_sort.sort_values(by='bleachpoints').index.tolist():
+            rgba_winter_sort.append(rgba_winter_woBg[i + 1])
+        winter_woBg = Colormap(rgba_winter_sort)
+    else:
+        print("no bleach points")
 
     # display control points
     #viewer.add_image(ctrlpoints, name='ctrl points', colormap=('red woBg',red_woBg))
@@ -230,7 +243,8 @@ with napari.gui_qt():
     viewer.add_points(points, name='aim points', size=size, edge_color='r', face_color='r')
 
     # display filtered bleach points
-    viewer.add_image(label_bleachpoints, name='bleach points', colormap=('winter woBg', winter_woBg))
+    if len(pointer_filtered) != 0:
+        viewer.add_image(label_bleachpoints, name='bleach points', colormap=('winter woBg', winter_woBg))
 
     # plot FRAP curves of bleach points (photobleaching corrected)
     for i in range(len(t_meanInt_bleachpoints_pbcorrected)):
