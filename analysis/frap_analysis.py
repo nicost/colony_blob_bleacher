@@ -22,7 +22,7 @@ from skimage import morphology, segmentation
 
 # .py
 from shared.find_blobs import find_blobs
-#from shared.remove_large_objects import remove_large_objects
+from shared.remove_objects import remove_small, remove_large
 
 # others
 from vispy.color import Colormap
@@ -38,7 +38,9 @@ import collections
 
 
 # constant values
-global_thresholding = 'na' # choose in between 'na','otsu' and 'yen' default = 'na'
+global_thresholding = 'na'  # choose in between 'na','otsu' and 'yen'; default = 'na'
+min_nucleoli_size = 10  # minimum nucleoli size; default = 10
+max_nucleoli_size = 1000    # maximum nucleoli size; default = 1000; larger ones are generally cells without nucleoli
 dilation_round = 3  # analysis size of the bleach points; default = 3
 x_shift = 0   # positive: right; default = 0
 y_shift = 0   # positive: up; default = 0
@@ -50,7 +52,7 @@ cmap_winter = cm.get_cmap('winter')
 
 # data source
 # data_path = "C:\\Users\\NicoLocal\\Images\\Jess\\20201116-Nucleoili-bleaching-4x\\PythonAcq1\\AutoBleach_15"
-# data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/TestedData/20201216/Ctrl-2DG-CCCP-36pos_partial/exp_110"
+#data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/TestedData/20201216/Ctrl-2DG-CCCP-36pos_partial/exp_37"
 data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/TestedData/20210109/B3-Site_0_1"
 
 
@@ -80,9 +82,12 @@ elif global_thresholding == 'otsu':
 elif global_thresholding == 'yen':
     nucleoli = find_blobs(test1_pix, threshold_yen(test1_pix), 500, 200)
 
-# remove artifacts connected to image border and nucleoli less than 5
-nucleoli_filtered = morphology.remove_small_objects(segmentation.clear_border(nucleoli), 5)
-#nucleoli_filtered = remove_large_objects(nucleoli_filtered, 500)
+# nucleoli filter:
+# remove artifacts connected to image border
+# size filter [10,1000]
+nucleoli_filtered = segmentation.clear_border(nucleoli)
+nucleoli_filtered = remove_small(nucleoli_filtered, min_nucleoli_size)
+nucleoli_filtered = remove_large(nucleoli_filtered, max_nucleoli_size)
 label_nucleoli_filtered = label(nucleoli_filtered)
 nucleoli_prop = regionprops(label_nucleoli_filtered)
 # get the size of each nucleoli
