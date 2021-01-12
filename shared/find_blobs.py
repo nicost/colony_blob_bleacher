@@ -28,21 +28,26 @@ def find_blobs(pixels: np.array, global_threshold: float, extreme_val: int, bg_v
 
     Otsu was used originally, but does not work well for high variation images,
     blobs with high intensities will smear together.
-    Use Yen instead.  Add into one more round of binary_erosion and dilation.
+    Yen works fine for this situation, but not okay for certain situation.
+    Add into parameters to select using global thresholding and additional boundary clearance (erosion/dilation).
 
     :param pixels: input image
     :param global_threshold: Threshold value to create global threshold.  try: threshold_otsu(pixels)
+                             0: does not apply global thresholding
     :param extreme_val: used to find local maxima
     :param bg_val: used to define background for watershed
     :return: segmented image of same size as input
     """
     seg_wat = segment_watershed(pixels, extreme_val, bg_val)
-    binary_global = pixels > global_threshold
-    binary_global = binary_erosion(binary_global)
-    binary_global = binary_dilation(binary_global)
     merge = np.zeros_like(pixels)
     merge[seg_wat == 2] = 1
-    merge |= binary_global
+
+    if global_threshold != 0:
+        binary_global = pixels > global_threshold
+        binary_global = binary_erosion(binary_global)
+        binary_global = binary_dilation(binary_global)
+        merge |= binary_global
+
     return merge
 
 
