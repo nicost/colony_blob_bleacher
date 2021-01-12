@@ -32,6 +32,8 @@ def find_blobs(pixels: np.array, global_threshold: float, extreme_val: int, bg_v
     :param bg_val: used to define background for watershed
     :return: segmented image of same size as input
     """
+    if global_threshold < extreme_val:
+        global_threshold = extreme_val
     seg_wat = segment_watershed(pixels, extreme_val, bg_val)
     binary_global = pixels > global_threshold
     merge = np.zeros_like(pixels)
