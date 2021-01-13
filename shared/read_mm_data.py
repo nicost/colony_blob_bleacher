@@ -17,7 +17,7 @@ bridge = Bridge()
 mmc = bridge.get_core()
 mm = bridge.get_studio()
 
-data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/TestedData/data20201116/AutoBleach_15"
+data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/TestedData/20201116/AutoBleach_15"
 #"C:\\Users\\NicoLocal\\Images\\Jess\\20201116-Nucleoili-bleaching-4x\\PythonAcq1\\AutoBleach_15"
 
 store = mm.data().load_data(data_path, True)
