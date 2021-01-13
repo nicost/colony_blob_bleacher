@@ -235,15 +235,25 @@ for i in range(len(pointer_ft)):
     slope.append(slope_temp)
 
 pointer_ft = dat.add_columns(pointer_ft, ['bleach_frame', 'min_int_frame', 'mean_int_post', 'mean_int_pre',
-                                          'imaging_length', 'avg_int_pre', 'min_int', 'int_stable', 'int_half',
-                                          'half_frame', 't_half', 'ini_slope'],
-                             [bleach_frame_pointer_fl, min_int_frame, t_int_post, t_int_pre, imaging_length,
-                              avg_int_pre, min_int, int_stable, int_half, half_frame, t_half, slope])
+                                          'imaging_length', 'avg_int_pre', 'min_int', 'int_stable',
+                                          'int_half', 'half_frame', 't_half', 'ini_slope'],
+                             [bleach_frame_pointer_fl, min_int_frame, t_int_post, t_int_pre,
+                              imaging_length, avg_int_pre, min_int, int_stable,
+                              int_half, half_frame, t_half, slope])
 
 # --------------------------
 # OUTPUT FILE
 # --------------------------
-pointer_ft.to_csv('%s/data.txt'% data_path, index=None, sep='\t')
+pointer_out = pd.DataFrame({'x': pointer_ft['x'],
+                            'y': pointer_ft['y'],
+                            'corresponding_nucleoli_size': pointer_ft['size'],
+                            'bleach_frame': pointer_ft['bleach_frame'],
+                            'avg_int_pre': pointer_ft['avg_int_pre'],
+                            'min_int': pointer_ft['min_int'],
+                            'int_stable': pointer_ft['int_stable'],
+                            't_half': pointer_ft['t_half'],
+                            'slope': pointer_ft['ini_slope']})
+pointer_out.to_csv('%s/data.txt'% data_path, index=None, sep='\t')
 
 # --------------------------
 # OUTPUT DISPLAY
