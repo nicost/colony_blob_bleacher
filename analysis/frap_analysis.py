@@ -179,17 +179,12 @@ print("%d ctrl points are used to correct photobleaching." % obj.object_count(ct
 t_int_analysis_spots_ft_cor = ana.pb_correction(t_int_analysis_spots_ft_cor, pb_factor)
 # add corrected intensities into pointer_ft
 pointer_ft = dat.add_object_measurements(pointer_ft, 'mean_int', 'analysis_spots_ft', t_int_analysis_spots_ft_cor)
-# add bleach frame into pointer_ft
-# add min intensity frame into pointer_ft
+
+# --------------------------
+# MEASUREMENTS
+# --------------------------
 bleach_frame_pointer_fl = []
 min_int_frame = []
-for i in range(len(pointer_ft)):
-    bleach_frame_pointer_fl.append(dat.find_pos(pointer_ft[0][i].split(' ')[1], t_time))
-    min_int_frame.append(pointer_ft['mean_int'][i].tolist().index(min(pointer_ft['mean_int'][i])))
-pointer_ft['bleach_frame'] = bleach_frame_pointer_fl
-pointer_ft['min_int_frame'] = min_int_frame
-
-# generate aligned intensities
 t_int_post = []
 t_int_pre = []
 imaging_length = []
@@ -197,48 +192,53 @@ avg_int_pre = []
 min_int = []
 int_stable = []
 int_half = []
-t_int_post_zero = []
-
+half_frame = []
+t_half = []
+slope = []
 for i in range(len(pointer_ft)):
-    num_pre = pointer_ft['min_int_frame'][i]
-    num_post = max_t-num_pre
+    # number of first frame after photobleaching (num_pre)
+    num_pre = dat.find_pos(pointer_ft[0][i].split(' ')[1], t_time)
+    bleach_frame_pointer_fl.append(num_pre)
+    # the frame of min intensity
+    min_int_frame_temp = pointer_ft['mean_int'][i].tolist().index(min(pointer_ft['mean_int'][i]))
+    min_int_frame.append(min_int_frame_temp)
+    # imaging length of the frap curve after min_int_frame
+    num_post = max_t - min_int_frame_temp
     imaging_length.append(num_post)
+    # intensities before photobleaching and intensities after min_intensity
     int_post = pointer_ft['mean_int'][i][-num_post:]
     int_pre = pointer_ft['mean_int'][i][:num_pre]
     t_int_pre.append(int_pre)
     t_int_post.append(int_post)
+    # mean intensity before photobleaching
     avg_int_pre.append(np.mean(int_pre))
+    # minimum intensity after photobleaching
     min_int_temp = np.min(int_post)
     min_int.append(min_int_temp)
+    # stable intensity calculated from last 20 frames of the frap curve
     int_stable_temp = np.mean(pointer_ft['mean_int'][i][-20:])
     int_stable.append(int_stable_temp)
-    int_half.append(0.5*(min_int_temp+int_stable_temp))
-    int_post_zero = [x-min_int_temp for x in int_post]
-    t_int_post_zero.append(int_post_zero)
-pointer_ft = dat.add_columns(pointer_ft, ['mean_int_post', 'mean_int_post_zero', 'mean_int_pre', 'imaging_length',
-                                          'avg_int_pre', 'min_int', 'int_stable', 'int_half'],
-                             [t_int_post, t_int_post_zero, t_int_pre, imaging_length, avg_int_pre, min_int, int_stable, int_half])
-# calculate t-half
-half_frame = []
-for i in range(len(pointer_ft)):
-    half_frame_temp = dat.find_pos(pointer_ft['int_half'][i], pointer_ft['mean_int_post'][i])
+    # half intensity
+    int_half_temp = 0.5 * (min_int_temp + int_stable_temp)
+    int_half.append(int_half_temp)
+    # number of frames it take to reach half intensity
+    half_frame_temp = dat.find_pos(int_half_temp, int_post)
     half_frame.append(half_frame_temp)
-pointer_ft['half_frame'] = half_frame
-
-t_half = []
-for i in range(len(pointer_ft)):
-    t_half_temp = dat.get_time_length(pointer_ft['min_int_frame'][i], pointer_ft['min_int_frame'][i]+pointer_ft['half_frame'][i], t_time)
+    # t_half (sec)
+    t_half_temp = dat.get_time_length(min_int_frame_temp,
+                                      min_int_frame_temp + half_frame_temp, t_time)
     t_half.append(t_half_temp)
-pointer_ft['t_half'] = t_half
-
-# calculate slope
-slope = []
-for i in range(len(pointer_ft)):
-    int_change = pointer_ft['mean_int'][i][pointer_ft['min_int_frame'][i]+10] - pointer_ft['min_int'][i]
-    t_change = dat.get_time_length(pointer_ft['min_int_frame'][i], pointer_ft['min_int_frame'][i]+10, t_time)
-    slope_temp = 1.0*(int_change / t_change)
+    # initial slope calculated based on first 10 frames
+    int_change = pointer_ft['mean_int'][i][min_int_frame_temp + 10] - min_int_temp
+    t_change = dat.get_time_length(min_int_frame_temp, min_int_frame_temp + 10, t_time)
+    slope_temp = 1.0 * (int_change / t_change)
     slope.append(slope_temp)
-pointer_ft['ini_slope'] = slope
+
+pointer_ft = dat.add_columns(pointer_ft, ['bleach_frame', 'min_int_frame', 'mean_int_post', 'mean_int_pre',
+                                          'imaging_length', 'avg_int_pre', 'min_int', 'int_stable', 'int_half',
+                                          'half_frame', 't_half', 'ini_slope'],
+                             [bleach_frame_pointer_fl, min_int_frame, t_int_post, t_int_pre, imaging_length,
+                              avg_int_pre, min_int, int_stable, int_half, half_frame, t_half, slope])
 
 # --------------------------
 # OUTPUT FILE
