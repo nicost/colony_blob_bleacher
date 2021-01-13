@@ -1,9 +1,15 @@
+# ------------------------------------------
+# FUNCTIONS for NON 0-AND-1 NP.ARRAY (IMAGE)
+# ------------------------------------------
+
 from typing import List
 
 import numpy as np
 from skimage.feature import peak_local_max
 from skimage.filters import rank, threshold_triangle
-from skimage.morphology import disk, opening, dilation
+from skimage.morphology import disk, opening, dilation, binary_dilation
+from skimage.measure import label, regionprops
+
 
 DEFAULT = object()
 
@@ -39,9 +45,9 @@ def bleach_location(pre_pixels: np.array,
             cc = post_pixels.shape[1] - expected_position[1]
             ep_rc = [expected_position[0], cc]
             pre_roi = pre_pixels[ep_rc[0] - half_roi_size[0]:ep_rc[0] + half_roi_size[0],
-                                 ep_rc[1] - half_roi_size[1]:ep_rc[1] + half_roi_size[1]]
+                      ep_rc[1] - half_roi_size[1]:ep_rc[1] + half_roi_size[1]]
             post_roi = post_pixels[ep_rc[0] - half_roi_size[0]:ep_rc[0] + half_roi_size[0],
-                                   ep_rc[1] - half_roi_size[1]:ep_rc[1] + half_roi_size[1]]
+                       ep_rc[1] - half_roi_size[1]:ep_rc[1] + half_roi_size[1]]
     subtracted = post_roi + 100 - pre_roi
     selem = disk(2)
     subtracted_mean = rank.mean(subtracted, selem=selem)
@@ -79,3 +85,106 @@ def central_pixel_without_cells(pixels: np.array):
         return location
 
     return False
+
+
+def analysis_mask(pixels: np.array, x: list, y: list, num_dilation=3):
+    """
+    Generates an analysis mask from all the points' x,y positions.
+
+    Expects img_example to be the same size as the expected output. With the given x,y
+    positions, a 0-and-1 binary mask is generated after dilating certain rounds from the
+    given coordinates.
+
+    :param pixels: nd.array
+                Requires to be the same size as the output.
+    :param x: list
+                List of x coordinates.
+    :param y: list
+                List of y coordinates
+    :param num_dilation: int, optional (default: 3)
+                Number of dilation applied from the coordinates.
+    :return: out: nd.array, 0-and-1, same shape and type as input pixels
+    """
+    out = np.zeros_like(pixels)
+
+    if len(x) == len(y):
+        for i in range(len(x)):
+            out[x[i], y[i]] = 1
+        for i in range(num_dilation):
+            out = binary_dilation(out)
+    else:
+        raise ValueError("Length of x: %d and y: %d does not match" % (len(x), len(y)))
+
+    return out
+
+
+def get_bg_int(t_pixels: list):
+    """
+    Measure background intensities of a given movie.
+
+    :param t_pixels: list, time series of np.array (movie)
+    :return: t_bg_int: list of background intensities
+    """
+    t_bg_int = []
+    for i in range(len(t_pixels)):
+        bg = np.zeros_like(t_pixels[i])
+        bg[t_pixels[i] < 300] = 1
+        bg_prop = regionprops(label(bg), t_pixels[i])
+        t_bg_int.append(bg_prop[0].mean_intensity)
+
+    return t_bg_int
+
+
+def bg_correction(t_int: list, t_bg_int: list):
+    """
+    Background correction of time series intensities.
+
+    :param t_int: list of time series intensities of multiple points
+    :param t_bg_int: list of background intensities
+    :return: out: list of background corrected time series intensities of multiple points
+    """
+    out = [[] for _ in range(len(t_int))]
+    for i in range(len(t_int)):
+        if len(t_int[i]) == len(t_bg_int):
+            for t in range(len(t_int[i])):
+                if t_int[i][t]-t_bg_int[t] > 0:
+                    out[i].append(t_int[i][t]-t_bg_int[t])
+                else:
+                    out[i].append(0)
+        else:
+            raise ValueError("Length of intensities: %d does not match with background intensities: %d"
+                             % (len(t_int[i]), len(t_bg_int)))
+
+    return out
+
+
+def get_pb_factor(t_int: list):
+    """
+    Measure photobleaching factor from given time series intensities of multiple control points.
+
+    :param t_int: list of time series intensities of multiple points
+    :return: pb_factor: list of photobleaching factors
+    """
+    pb_factor = []
+    for t in range(len(t_int[0])):
+        pb_ratio = []
+        for i in range(len(t_int)):
+            pb_ratio.append(np.mean(t_int[i][t])/np.mean(t_int[i][0]))
+        pb_factor.append(np.mean(pb_ratio))
+
+    return pb_factor
+
+
+def pb_correction(t_int: list, pb_factor: list):
+    """
+    Photobleaching correction of time series intensities.
+
+    :param t_int: list of time series intensities of multiple points
+    :param pb_factor: list of photobleaching factors
+    :return: out: list of photobleaching corrected time series intensities of multiple points
+    """
+    out = []
+    for i in range(len(t_int)):
+        out.append(np.divide(t_int[i], pb_factor))
+
+    return out
