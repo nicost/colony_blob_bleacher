@@ -10,8 +10,8 @@ DEFAULT = object()
 
 def bleach_location(pre_pixels: np.array,
                     post_pixels: np.array,
-                    expected_position: List[int] = DEFAULT,
-                    half_roi_size: List[int] = DEFAULT):
+                    expected_position = DEFAULT,
+                    half_roi_size = DEFAULT):
     """
     Finds the location of a bright spot in the post_pixels image
     The pre_pixel image will be subtracted from the pos_pixel image (after adding
@@ -20,8 +20,8 @@ def bleach_location(pre_pixels: np.array,
     within which the real maximum should be located
     :param pre_pixels:
     :param post_pixels:
-    :param expected_position:
-    :param half_roi_size:
+    :param expected_position: tuple[int, int] with expected position
+    :param half_roi_size: tuple[int, int] area aruond expected_position to be searched for spot
     :return:
     """
     # assume pre and post are the same size
