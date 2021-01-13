@@ -38,7 +38,7 @@ def sorted_num_color_colormap(num_color_rgba, pd, sort_name, obj_name):
     :return: num_color_cmap: sorted colormap
              rgba: colormap array (without background)
     """
-    pd_sort = pd.sort_values(by=sort_name).reset_index()
+    pd_sort = pd.sort_values(by=sort_name).reset_index(drop=True)
 
     rgba = [num_color_rgba[0]]
     for i in pd_sort.sort_values(by=obj_name).index.tolist():
