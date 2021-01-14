@@ -66,25 +66,19 @@ def get_binary_global(pixels: np.array, threshold_method='na'):
         out = binary_erosion(out)
         out = binary_dilation(out)
     elif threshold_method == 'local':
-        # generate background mask
-        bg = np.zeros_like(pixels)
-        bg[pixels > 200] = 1
-        for i in range(10):  # 10: specific for nucleoli
-            bg = binary_erosion(bg)
+        # use otsu thresholding to determine background region
+        global_threshold_val = threshold_otsu(pixels)
+        bg = pixels > global_threshold_val
         # apply local thresholding
         local = threshold_local(pixels, 21)  # 21: specific for nucleoli
         out = pixels > local
         # remove large connected areas
         out = obj.remove_large(out, 1000)  # 1000: specific for nucleoli
-        # avoid areas close to nuclear boundary
-        # intensity tends to connected and generate fake blobs
-        # might miss something
+        # combine with otsu thresholding to determine background region
         out[bg == 0] = 0
         # two rounds of erosion/dilation and remove_small to clear out background
         out = binary_erosion(out)
-        out = binary_erosion(out)
         out = obj.remove_small(out, 10)  # 10: specific for nucleoli
-        out = binary_dilation(out)
         out = binary_dilation(out)
 
     return out
