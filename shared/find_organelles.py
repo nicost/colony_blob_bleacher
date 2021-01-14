@@ -8,19 +8,20 @@ from skimage.segmentation import clear_border
 from shared.find_blobs import find_blobs
 from shared.objects import remove_small, remove_large
 import shared.warning as warn
+import numpy as np
 
 
-def find_nucleoli(img, global_thresholding='na', extreme_val=500, bg_val=200,
+def find_nucleoli(pixels: np.array, global_thresholding='na', extreme_val=500, bg_val=200,
                   min_size=10, max_size=1000):
     """
     Find nucleoli from a given image.
 
-    Expects img to be an array, and finds nucleoli objects using watershed by
+    Expects pixels to be an array, and finds nucleoli objects using watershed by
     flooding approach with indicated global thresholding methods (supports 'na',
     'otsu' and 'yen').  Founded nucleoli are filtered by default location filter
     (filter out nucleoli located at the boundary of the image) and size filter.
 
-    :param img: ndarray (non-negative int type)
+    :param pixels: np.array (non-negative int type)
                 Image pixel
     :param global_thresholding: only accepts 'na', 'otsu' or 'yen', optional
                 (default: 'na')
@@ -39,18 +40,18 @@ def find_nucleoli(img, global_thresholding='na', extreme_val=500, bg_val=200,
                 Binary array with found nucleoli labeled with 1.
     """
     # Raise type error if not int
-    warn.check_img_supported(img)
+    warn.check_img_supported(pixels)
 
     # Check global thresholding options
     # Raise value error if not 'na', 'otsu' or 'yen'
     warn.check_input_supported(global_thresholding, ['na','otsu','yen'])
 
     if global_thresholding == 'na':
-        nucleoli = find_blobs(img, 0, extreme_val, bg_val)
+        nucleoli = find_blobs(pixels, 0, extreme_val, bg_val)
     elif global_thresholding == 'otsu':
-        nucleoli = find_blobs(img, threshold_otsu(img), extreme_val, bg_val)
+        nucleoli = find_blobs(pixels, threshold_otsu(img), extreme_val, bg_val)
     elif global_thresholding == 'yen':
-        nucleoli = find_blobs(img, threshold_yen(img), extreme_val, bg_val)
+        nucleoli = find_blobs(pixels, threshold_yen(img), extreme_val, bg_val)
 
     # Nucleoli filters:
     # Location filter: remove artifacts connected to image border
