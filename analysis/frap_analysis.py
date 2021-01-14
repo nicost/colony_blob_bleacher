@@ -34,7 +34,7 @@ import shared.objects as obj
 data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/TestedData/20201116/AutoBleach_15"
 
 # values
-thresholding = 'na'  # global thresholding method; choose in between 'na','otsu' and 'yen'; default = 'na'
+thresholding = 'local'  # global thresholding method; choose in between 'na','otsu','yen' and 'local'; default = 'na'
 min_size = 10  # minimum nucleoli size; default = 10
 max_size = 1000  # maximum nucleoli size; default = 1000;
                  # larger ones are generally cells without nucleoli
