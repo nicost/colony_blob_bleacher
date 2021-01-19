@@ -2,6 +2,9 @@ import numpy as np
 from skimage import segmentation
 from skimage.filters import sobel
 from skimage.morphology import extrema, binary_dilation, binary_erosion
+from skimage.filters import threshold_otsu, threshold_yen, threshold_local
+
+import shared.objects as obj
 
 
 def segment_watershed(pixels: np.array, extreme_val: int, bg_val: int):
@@ -20,37 +23,65 @@ def segment_watershed(pixels: np.array, extreme_val: int, bg_val: int):
     return segmentation.watershed(elevation_map, markers)
 
 
-def find_blobs(pixels: np.array, global_threshold: float, extreme_val: int, bg_val: int):
+def find_blobs(pixels: np.array, binary_global: np.array, extreme_val: int, bg_val: int):
     """
     Find "blobs" in image.  Current strategy: use a segmentation.watershed on the input pixes,
     using extreme_val to find local maxima, adn bg_val to find background.  Combine the
-    watershed with a globally thresholded image (using logical OR).
-
-    Otsu was used originally, but does not work well for high variation images,
-    blobs with high intensities will smear together.
-    Yen works fine for this situation, but not okay for certain situation.
-    Add into parameters to select using global thresholding and additional boundary clearance (erosion/dilation).
+    watershed with a globally thresholded image (using logical OR) binary_global.
 
     :param pixels: input image
-    :param global_threshold: Threshold value to create global threshold.  try: threshold_otsu(pixels)
-                             0: does not apply global thresholding
+    :param binary_global: binary threshold image gain from global thresholding
     :param extreme_val: used to find local maxima
     :param bg_val: used to define background for watershed
     :return: segmented image of same size as input
     """
-    if global_threshold < extreme_val:
-        global_threshold = extreme_val
     seg_wat = segment_watershed(pixels, extreme_val, bg_val)
     merge = np.zeros_like(pixels)
     merge[seg_wat == 2] = 1
-
-    if global_threshold != 0:
-        binary_global = pixels > global_threshold
-        binary_global = binary_erosion(binary_global)
-        binary_global = binary_dilation(binary_global)
-        merge |= binary_global
+    merge[binary_global == 1] = 1
 
     return merge
+
+
+def get_binary_global(pixels: np.array, threshold_method='na'):
+    """
+    Calculate binary global thresholding image
+
+    :param pixels: np.array
+    :param threshold_method: method used to perform global thresholding, enable 'na',
+                'otsu', 'yen' and 'local'
+    :return: out: 0-and-1 np.array, binary global thresholding image
+    """
+    if threshold_method == 'na':
+        out = np.zeros_like(pixels)
+    elif (threshold_method == 'otsu')|(threshold_method == 'yen'):
+        if threshold_method == 'otsu':
+            global_threshold_val = threshold_otsu(pixels)
+            # Threshold value to create global threshold.  try: threshold_otsu(pixels)
+            # 0: does not apply global thresholding
+        else:
+            global_threshold_val = threshold_yen(pixels)
+        out = pixels > global_threshold_val
+        # one round of erosion/dilation to clear out boundary
+        out = binary_erosion(out)
+        out = binary_dilation(out)
+    elif threshold_method == 'local':
+        # use otsu thresholding to determine background region
+        global_threshold_val = threshold_otsu(pixels)
+        bg = pixels > global_threshold_val
+        # apply local thresholding
+        local = threshold_local(pixels, 21)  # 21: specific for nucleoli
+        out = pixels > local
+        # remove large connected areas
+        out = obj.remove_large(out, 1000)  # 1000: specific for nucleoli
+        # combine with otsu thresholding to determine background region
+        out[bg == 0] = 0
+        # two rounds of erosion/dilation and remove_small to clear out background
+        out = binary_erosion(out)
+        out = obj.remove_small(out, 10)  # 10: specific for nucleoli
+        out = binary_dilation(out)
+
+    return out
 
 
 def select(in_list: list, key, in_min: int, in_max: int):

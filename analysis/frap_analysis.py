@@ -34,7 +34,7 @@ import shared.objects as obj
 data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/TestedData/20201116/AutoBleach_15"
 
 # values
-thresholding = 'na'  # global thresholding method; choose in between 'na','otsu' and 'yen'; default = 'na'
+thresholding = 'local'  # global thresholding method; choose in between 'na','otsu','yen' and 'local'; default = 'na'
 min_size = 10  # minimum nucleoli size; default = 10
 max_size = 1000  # maximum nucleoli size; default = 1000;
                  # larger ones are generally cells without nucleoli
@@ -183,18 +183,25 @@ pointer_ft = dat.add_object_measurements(pointer_ft, 'mean_int', 'analysis_spots
 # --------------------------
 # MEASUREMENTS
 # --------------------------
-bleach_frame_pointer_fl = []
-min_int_frame = []
-t_int_post = []
-t_int_pre = []
-imaging_length = []
-avg_int_pre = []
-min_int = []
-int_stable = []
-int_half = []
-half_frame = []
-t_half = []
-slope = []
+# for all the filtered analysis spots
+bleach_frame_pointer_fl = []  # frame number of or right after photobleaching
+min_int_frame = []  # frame number of the minimum intensity
+t_int_post = []  # intensity series after minimum intensity (includes min_int_frame, frap recovery curve)
+imaging_length = []  # number of frames of t_int_post
+t_int_pre = []  # intensity series before photobleaching (without bleach_frame, before spike)
+avg_int_pre = []  # mean intensity before photobleaching
+mean_int_nor = []  # intensity series normalized with avg_int_pre
+t_int_post_nor = []  # t_int_post normalized with avg_int_pre
+min_int = []  # minimum intensity after photobleaching
+min_int_nor = []  # min_int normalized with avg_int_pre
+int_stable = []  # final stable intensity
+int_stable_nor = []  # int_stable normalized with avg_int_pre
+int_half = []  # half intensity
+int_half_nor = []  # int_half normalized with avg_int_pre
+half_frame = []  # number of frames it takes to reach half intensity (min_int_frame, half_int_frame]
+t_half = []  # t-half
+slope = []  # initial slope of the recovery curve (relative intensity)
+
 for i in range(len(pointer_ft)):
     # number of first frame after photobleaching (num_pre)
     num_pre = dat.find_pos(pointer_ft[0][i].split(' ')[1], t_time)
@@ -211,16 +218,25 @@ for i in range(len(pointer_ft)):
     t_int_pre.append(int_pre)
     t_int_post.append(int_post)
     # mean intensity before photobleaching
-    avg_int_pre.append(np.mean(int_pre))
+    avg_int_pre_temp = np.mean(int_pre)
+    avg_int_pre.append(avg_int_pre_temp)
+    # intensity normalized based on avg_int_pre
+    mean_int_nor_temp = pointer_ft['mean_int'][i]/([avg_int_pre_temp]*len(pointer_ft['mean_int'][i]))
+    mean_int_nor.append(mean_int_nor_temp)
+    # intensities after min_intensity (normalized)
+    t_int_post_nor.append(int_post/([avg_int_pre_temp]*len(int_post)))
     # minimum intensity after photobleaching
     min_int_temp = np.min(int_post)
     min_int.append(min_int_temp)
+    min_int_nor.append(min_int_temp/avg_int_pre_temp)
     # stable intensity calculated from last 20 frames of the frap curve
     int_stable_temp = np.mean(pointer_ft['mean_int'][i][-20:])
     int_stable.append(int_stable_temp)
+    int_stable_nor.append(int_stable_temp/avg_int_pre_temp)
     # half intensity
     int_half_temp = 0.5 * (min_int_temp + int_stable_temp)
     int_half.append(int_half_temp)
+    int_half_nor.append(int_half_temp/avg_int_pre_temp)
     # number of frames it take to reach half intensity
     half_frame_temp = dat.find_pos(int_half_temp, int_post)
     half_frame.append(half_frame_temp)
@@ -229,30 +245,35 @@ for i in range(len(pointer_ft)):
                                       min_int_frame_temp + half_frame_temp, t_time)
     t_half.append(t_half_temp)
     # initial slope calculated based on first 10 frames
-    int_change = pointer_ft['mean_int'][i][min_int_frame_temp + 10] - min_int_temp
+    int_change = (pointer_ft['mean_int'][i][min_int_frame_temp + 10] - min_int_temp)/avg_int_pre_temp
     t_change = dat.get_time_length(min_int_frame_temp, min_int_frame_temp + 10, t_time)
     slope_temp = 1.0 * (int_change / t_change)
     slope.append(slope_temp)
 
-pointer_ft = dat.add_columns(pointer_ft, ['bleach_frame', 'min_int_frame', 'mean_int_post', 'mean_int_pre',
-                                          'imaging_length', 'avg_int_pre', 'min_int', 'int_stable',
-                                          'int_half', 'half_frame', 't_half', 'ini_slope'],
-                             [bleach_frame_pointer_fl, min_int_frame, t_int_post, t_int_pre,
-                              imaging_length, avg_int_pre, min_int, int_stable,
-                              int_half, half_frame, t_half, slope])
+pointer_ft = dat.add_columns(pointer_ft, ['mean_int_nor', 'bleach_frame', 'min_int_frame', 'imaging_length',
+                                          'mean_int_pre', 'mean_int_post', 'mean_int_post_nor', 'avg_int_pre',
+                                          'min_int', 'min_int_nor', 'int_stable', 'int_stable_nor',
+                                          'int_half', 'int_half_nor', 'half_frame', 't_half', 'ini_slope'],
+                             [mean_int_nor, bleach_frame_pointer_fl, min_int_frame, imaging_length,
+                              t_int_pre, t_int_post, t_int_post_nor, avg_int_pre,
+                              min_int, min_int_nor, int_stable, int_stable_nor,
+                              int_half, int_half_nor, half_frame, t_half, slope])
 
 # --------------------------
 # OUTPUT FILE
 # --------------------------
+#pointer_ft.to_csv('%s/data_full.txt'% data_path, index=None, sep='\t')
 pointer_out = pd.DataFrame({'x': pointer_ft['x'],
                             'y': pointer_ft['y'],
                             'corresponding_nucleoli_size': pointer_ft['size'],
                             'bleach_frame': pointer_ft['bleach_frame'],
                             'avg_int_pre': pointer_ft['avg_int_pre'],
                             'min_int': pointer_ft['min_int'],
+                            'min_int_nor': pointer_ft['min_int_nor'],
                             'int_stable': pointer_ft['int_stable'],
-                            't_half': pointer_ft['t_half'],
-                            'slope': pointer_ft['ini_slope']})
+                            'int_stable_nor': pointer_ft['int_stable_nor'],
+                            't_half (s)': pointer_ft['t_half'],
+                            'slope (/s)': pointer_ft['ini_slope']})
 pointer_out.to_csv('%s/data.txt'% data_path, index=None, sep='\t')
 
 # --------------------------
@@ -303,19 +324,40 @@ with napari.gui_qt():
     """
 
     # matplotlib display
-
-    # Plot-left: FRAP curves of filtered analysis spots after intensity correction
-    # sorted based on nucleoli size
+    # sorted based on nucleoli size (color coded)
     pointer_sort = pointer_ft.sort_values(by='size').reset_index(drop=True)  # from small to large
-    for i in range(len(t_int_analysis_spots_ft_cor)):
-        ax1.plot(t_int_analysis_spots_ft_cor[pointer_sort['analysis_spots_ft'][i]], color=rgba_winter[i])
+
+    # Plot-left: FRAP curves of filtered analysis spots after intensity correction (absolute intensity)
+    for i in range(len(pointer_sort)):
+        ax1.plot(pointer_sort['mean_int'][i], color=rgba_winter[i])
     ax1.set_title('FRAP curves')
     ax1.set_xlabel('time')
     ax1.set_ylabel('intensity')
 
-    # Plot-right: FRAP curves of filtered analysis spots after intensity correction (bleach time zero aligned)
+    """
+    # Plot-left: FRAP curves of filtered analysis spots after intensity correction (relative intensity)
+    for i in range(len(pointer_sort)):
+        ax1.plot(pointer_sort['mean_int_nor'][i], color=rgba_winter[i])
+    ax1.set_title('FRAP curves')
+    ax1.set_xlabel('time')
+    ax1.set_ylabel('intensity')
+    """
+
+    """
+    # Plot-right: FRAP curves of filtered analysis spots after intensity correction 
+    # absolute intensity, bleach time zero aligned
     for i in range(len(pointer_sort)):
         ax2.plot(np.arange(len(pointer_sort['mean_int_post'][i])), pointer_sort['mean_int_post'][i], color=rgba_winter[i])
+    ax2.set_title('FRAP curves')
+    ax2.set_xlabel('time')
+    ax2.set_ylabel('intensity')
+    """
+
+    # Plot-right: FRAP curves of filtered analysis spots after intensity correction
+    # relative intensity, bleach time zero aligned
+    for i in range(len(pointer_sort)):
+        ax2.plot(np.arange(len(pointer_sort['mean_int_post_nor'][i])), pointer_sort['mean_int_post_nor'][i],
+                 color=rgba_winter[i])
     ax2.set_title('FRAP curves')
     ax2.set_xlabel('time')
     ax2.set_ylabel('intensity')
