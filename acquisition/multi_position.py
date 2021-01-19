@@ -35,11 +35,12 @@ def snap_and_get_bleach_location(exposure, cutoff):
         projector.enable_point_and_shoot_mode(True)
         pre_img = mm.live().snap(True).get(0)
         pre_np_img = np.reshape(pre_img.get_raw_pixels(), newshape=[pre_img.get_height(), pre_img.get_width()])
-        projector.add_point_to_point_and_shoot_queue(location[1], location[0])
+        projector.add_point_to_point_and_shoot_queue(int(location[1]), int(location[0]))
         post_img = mm.live().snap(True).get(0)
         post_np_img = np.reshape(post_img.get_raw_pixels(), newshape=[post_img.get_height(), post_img.get_width()])
         measured_location = bleach_location(pre_np_img, post_np_img, location, [100, 100])
         offset = (measured_location[0] - location[0], measured_location[1] - location[1])
+        print(offset)
         if offset[0] * offset[0] + offset[1] * offset[1] > cutoff:
             projector.calibrate(True)
         projector.set_exposure(projector_device, p_exposure)
@@ -64,8 +65,11 @@ for idx in range(pos_list.get_number_of_positions()):
     time.sleep(0.1)
     if count >= nr_between_projector_checks:
         error = snap_and_get_bleach_location(200, 4)
-        if error >= 0:
-            count += count
+        if error < 0:
+            count -= 1
+        else:
+            count = 0
+    count += 1
     img = mm.live().snap(False).get(0)
     pixels = np.reshape(img.get_raw_pixels(), newshape=[img.get_height(), img.get_width()])
     # find organelles using a combination of thresholding and watershed
