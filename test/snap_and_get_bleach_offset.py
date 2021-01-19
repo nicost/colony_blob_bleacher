@@ -5,8 +5,6 @@ from shared.analysis import bleach_location, central_pixel_without_cells
 
 exposure = 200
 
-print("Hello")
-
 # build up pycromanager bridge
 bridge = Bridge()
 mmc = bridge.get_core()
