@@ -4,6 +4,8 @@
 import numpy as np
 import pandas as pd
 import napari
+from scipy.optimize import curve_fit
+
 from pycromanager import Bridge
 
 from matplotlib.backends.qt_compat import QtCore, QtWidgets
@@ -25,6 +27,7 @@ import shared.analysis as ana
 import shared.display as dis
 import shared.dataframe as dat
 import shared.objects as obj
+import shared.math_functions as mat
 
 # --------------------------
 # PARAMETERS
@@ -164,6 +167,10 @@ for t in range(0, max_t):
 
 movies = np.stack(t_pixels, axis=0)
 
+real_time = []
+for i in range(max_t):
+    real_time.append(dat.get_time_length(0,i,t_time))
+
 # --------------------------
 # FRAP CURVE CORRECTION
 # --------------------------
@@ -192,6 +199,7 @@ t_int_pre = []  # intensity series before photobleaching (without bleach_frame, 
 pre_bleach_int = []  # mean intensity before photobleaching; pre-bleach intensity
 min_int = []  # minimum intensity after photobleaching
 t_int_post_nor = []  # t_int_post normalized with pre_bleach_int and min_int
+real_time_post = []  # time series represents in second
 mean_int_nor = []  # intensity series normalized with pre_bleach_int and min_int
 plateau_int = []  # plateau level intensity
 plateau_int_nor = []  # int_plateau normalized with pre_bleach_int and min_int; mobile fraction
@@ -217,6 +225,8 @@ for i in range(len(pointer_ft)):
     int_pre = pointer_ft['mean_int'][i][:num_pre]
     t_int_pre.append(int_pre)
     t_int_post.append(int_post)
+    # time series represents in sec
+    real_time_post.append([x - real_time[-num_post] for x in real_time[-num_post:]])
     # mean intensity before photobleaching
     pre_bleach_int_temp = np.mean(int_pre)
     pre_bleach_int.append(pre_bleach_int_temp)
@@ -255,29 +265,59 @@ for i in range(len(pointer_ft)):
     slope.append(slope_temp)
 
 pointer_ft = dat.add_columns(pointer_ft, ['int_curve_nor', 'bleach_frame', 'min_int_frame', 'imaging_length',
-                                          'int_curve_pre', 'int_curve_post', 'int_curve_post_nor', 'pre_bleach_int',
-                                          'min_int', 'plateau_int', 'mobile_fraction', 'immobile_fraction',
-                                          'half_int', 'half_int_nor', 'half_frame', 't_half', 'ini_slope'],
+                                          'int_curve_pre', 'int_curve_post', 'int_curve_post_nor', 'real_time_post',
+                                          'pre_bleach_int', 'min_int', 'plateau_int', 'mobile_fraction',
+                                          'immobile_fraction', 'half_int', 'half_int_nor', 'half_frame',
+                                          't_half', 'ini_slope'],
                              [mean_int_nor, bleach_frame_pointer_fl, min_int_frame, imaging_length,
-                              t_int_pre, t_int_post, t_int_post_nor, pre_bleach_int,
-                              min_int, plateau_int, plateau_int_nor, immobile_fraction,
-                              half_int, half_int_nor, half_frame, t_half, slope])
+                              t_int_pre, t_int_post, t_int_post_nor, real_time_post,
+                              pre_bleach_int, min_int, plateau_int, plateau_int_nor,
+                              immobile_fraction, half_int, half_int_nor, half_frame,
+                              t_half, slope])
+
+# --------------------------
+# CURVE FITTING
+# --------------------------
+single_exp_a = []
+single_exp_b = []
+single_exp_fit = []
+single_exp_r2 = []
+single_exp_t_half = []
+
+for i in range(len(pointer_ft)):
+    popt, _ = curve_fit(mat.single_exp, pointer_ft['real_time_post'][i], pointer_ft['int_curve_post_nor'][i])
+    a, b = popt
+    y_fit = []
+    for j in range(len(pointer_ft['real_time_post'][i])):
+        y_fit.append(mat.single_exp(pointer_ft['real_time_post'][i][j], a, b))
+    r2 = mat.r_square(pointer_ft['int_curve_post_nor'][i], y_fit)
+    t_half_fit = np.log(0.5)/(-b)
+    single_exp_a.append(a)
+    single_exp_b.append(b)
+    single_exp_fit.append(y_fit)
+    single_exp_r2.append(r2)
+    single_exp_t_half.append(t_half_fit)
+
+pointer_ft = dat.add_columns(pointer_ft, ['single_exp_fit', 'single_exp_r2', 'single_exp_a', 'single_exp_b',
+                                          'single_exp_mobile_fraction', 'single_exp_t_half'],
+                             [single_exp_fit, single_exp_r2, single_exp_a, single_exp_b,
+                              single_exp_a, single_exp_t_half])
 
 # --------------------------
 # OUTPUT FILE
 # --------------------------
-#pointer_ft.to_csv('%s/data_full.txt'% data_path, index=None, sep='\t')
+pointer_ft.to_csv('%s/data_full.txt'% data_path, index=None, sep='\t')
 pointer_out = pd.DataFrame({'x': pointer_ft['x'],
                             'y': pointer_ft['y'],
                             'corresponding_nucleoli_size': pointer_ft['size'],
                             'bleach_frame': pointer_ft['bleach_frame'],
                             'pre_bleach_int': pointer_ft['pre_bleach_int'],
                             'min_int': pointer_ft['min_int'],
-                            'plateau_int': pointer_ft['plateau_int'],
                             'mobile_fraction': pointer_ft['mobile_fraction'],
-                            'immobile_fraction': pointer_ft['immobile_fraction'],
                             't_half (s)': pointer_ft['t_half'],
-                            'slope (/s)': pointer_ft['ini_slope']})
+                            'single_exp_r2': pointer_ft['single_exp_r2'],
+                            'single_exp_mobile_fraction': pointer_ft['single_exp_mobile_fraction'],
+                            'single_exp_t_half': pointer_ft['single_exp_t_half']})
 pointer_out.to_csv('%s/data.txt'% data_path, index=None, sep='\t')
 
 # --------------------------
@@ -360,10 +400,12 @@ with napari.gui_qt():
     # Plot-right: FRAP curves of filtered analysis spots after intensity correction
     # relative intensity, bleach time zero aligned
     for i in range(len(pointer_sort)):
-        ax2.plot(np.arange(len(pointer_sort['int_curve_post_nor'][i])), pointer_sort['int_curve_post_nor'][i],
+        ax2.plot(pointer_sort['real_time_post'][i], pointer_sort['int_curve_post_nor'][i],
+                 color=rgba_winter[i], alpha=0.5)
+        ax2.plot(pointer_sort['real_time_post'][i], pointer_sort['single_exp_fit'][i], '--',
                  color=rgba_winter[i])
     ax2.set_title('FRAP curves')
-    ax2.set_xlabel('time')
+    ax2.set_xlabel('time (sec)')
     ax2.set_ylabel('intensity')
 
     """
