@@ -2,41 +2,45 @@
 # FUNCTIONS for ORGANELLE DETECTION
 # ------------------------------------------
 
-from skimage.filters import threshold_otsu, threshold_yen
 from skimage.segmentation import clear_border
 
 from shared.find_blobs import find_blobs, get_binary_global
 from shared.objects import remove_small, remove_large
+from skimage.measure import label, regionprops
 import shared.warning as warn
 import numpy as np
+import pandas as pd
+import math
 
 
-def find_nucleoli(pixels: np.array, global_thresholding='na', extreme_val=500, bg_val=200,
-                  min_size=10, max_size=1000):
+def find_organelle(pixels: np.array, global_thresholding='na', extreme_val=500, bg_val=200,
+                  min_size=5, max_size=1000):
     """
-    Find nucleoli from a given image.
+    Find organelle(nucleoli or SG) from a given image.
 
     Expects pixels to be an array, and finds nucleoli objects using watershed by
     flooding approach with indicated global thresholding methods (supports 'na',
-    'otsu' and 'yen').  Founded nucleoli are filtered by default location filter
-    (filter out nucleoli located at the boundary of the image) and size filter.
+    'otsu', 'yen', 'local-nucleoli' and 'local-sg').  Founded organelles are 
+    filtered by default location filter (filter out organelles located at the 
+    boundary of the image) and size filter.
 
     :param pixels: np.array (non-negative int type)
                 Image pixel
-    :param global_thresholding: only accepts 'na', 'otsu', 'yen' or 'local',
-                optional (default: 'local')
+    :param global_thresholding: only accepts 'na', 'otsu', 'yen', 'local-nucleoli'
+                or 'local-sg'
+                optional (default: 'na')
                 Whether or not ('na') to apply global thresholding method and
-                which method ('otsu' or 'yen') to apply
+                which method to apply
     :param extreme_val: int, optional (default: 500)
                 Used in shared.find_blobs.segment_watershed to find local maxima
     :param bg_val: int, optional (default: 200)
                 Used in shared.find_blobs.segment_watershed to define background
                 for watershed
-    :param min_size: int, optional (default: 10)
-                The smallest allowable nucleoli size.
+    :param min_size: int, optional (default: 5)
+                The smallest allowable organelle size.
     :param max_size: int, optional (default: 1000)
-                The largest allowable nucleoli size.
-    :returns nucleoli_filtered: 0-and-1 ndarray, same shape and type as input img
+                The largest allowable organelle size.
+    :returns nucleoli_filtered: 0-and-1 np.array, same shape and type as input img
                 Binary array with found nucleoli labeled with 1.
     """
     # Raise type error if not int
@@ -44,16 +48,40 @@ def find_nucleoli(pixels: np.array, global_thresholding='na', extreme_val=500, b
 
     # Check global thresholding options
     # Raise value error if not 'na', 'otsu' or 'yen'
-    warn.check_input_supported(global_thresholding, ['na', 'otsu', 'yen', 'local'])
+    warn.check_input_supported(global_thresholding, ['na', 'otsu', 'yen', 'local-nucleoli', 'local-sg'])
 
     # find nucleoli
-    nucleoli = find_blobs(pixels, get_binary_global(pixels, global_thresholding), extreme_val, bg_val)
+    organelle = find_blobs(pixels, get_binary_global(pixels, global_thresholding, min_size, max_size),
+                          extreme_val, bg_val, max_size)
 
     # Nucleoli filters:
     # Location filter: remove artifacts connected to image border
-    nucleoli_filtered = clear_border(nucleoli)
+    organelle_filtered = clear_border(organelle)
     # Size filter: default [10,1000]
-    nucleoli_filtered = remove_small(nucleoli_filtered, min_size)
-    nucleoli_filtered = remove_large(nucleoli_filtered, max_size)
+    organelle_filtered = remove_small(organelle_filtered, min_size)
+    organelle_filtered = remove_large(organelle_filtered, max_size)
 
-    return nucleoli_filtered
+    return organelle_filtered
+
+
+def sg_analysis(pixels: np.array, sg, pos):
+    label_sg = label(sg)
+    sg_prop = regionprops(label_sg)
+    sg_prop_int = regionprops(label_sg, pixels)
+    sg_areas = [p.area for p in sg_prop]
+    sg_x = [p.centroid[0] for p in sg_prop]
+    sg_y = [p.centroid[1] for p in sg_prop]
+    sg_mean_int = [p.mean_intensity for p in sg_prop_int]
+    sg_label = [p.label for p in sg_prop]
+    sg_circ = [(4 * math.pi * p.area) / (p.perimeter ** 2) for p in sg_prop]
+    # Eccentricity of the ellipse that has the same second-moments as the region.
+    # The eccentricity is the ratio of the focal distance (distance between focal points) over the major
+    # axis length. The value is in the interval [0, 1). When it is 0, the ellipse becomes a circle.
+    sg_eccentricity = [p.eccentricity for p in sg_prop]
+
+    # sg pd dataset
+    sg_pd = pd.DataFrame({'pos': [pos]*len(sg_prop), 'sg': sg_label, 'x': sg_x, 'y': sg_y, 'size': sg_areas,
+                          'int': sg_mean_int, 'circ': sg_circ, 'eccentricity': sg_eccentricity})
+
+    return sg_pd
+
