@@ -5,6 +5,7 @@ from skimage.morphology import extrema, binary_dilation, binary_erosion
 from skimage.filters import threshold_otsu, threshold_yen, threshold_local
 
 import shared.objects as obj
+from shared.objects import remove_small, remove_large
 
 
 def segment_watershed(pixels: np.array, extreme_val: int, bg_val: int):
@@ -23,7 +24,7 @@ def segment_watershed(pixels: np.array, extreme_val: int, bg_val: int):
     return segmentation.watershed(elevation_map, markers)
 
 
-def find_blobs(pixels: np.array, binary_global: np.array, extreme_val: int, bg_val: int):
+def find_blobs(pixels: np.array, binary_global: np.array, extreme_val: int, bg_val=200, max_size=1000):
     """
     Find "blobs" in image.  Current strategy: use a segmentation.watershed on the input pixes,
     using extreme_val to find local maxima, adn bg_val to find background.  Combine the
@@ -33,23 +34,32 @@ def find_blobs(pixels: np.array, binary_global: np.array, extreme_val: int, bg_v
     :param binary_global: binary threshold image gain from global thresholding
     :param extreme_val: used to find local maxima
     :param bg_val: used to define background for watershed
+    :param min_size: minimum size of the blobs
+    :param max_size: maximum size of the blobs
     :return: segmented image of same size as input
     """
-    seg_wat = segment_watershed(pixels, extreme_val, bg_val)
-    merge = np.zeros_like(pixels)
-    merge[seg_wat == 2] = 1
-    merge[binary_global == 1] = 1
+    if np.amax(pixels) < 1000:
+        merge = np.zeros_like(pixels)
+    else:
+        seg_wat = segment_watershed(pixels, extreme_val, bg_val)
+        merge = np.zeros_like(pixels)
+        merge[seg_wat == 2] = 1
+        merge = remove_large(merge, max_size)
+        binary_global = remove_large(binary_global, max_size)
+        merge[binary_global == 1] = 1
 
     return merge
 
 
-def get_binary_global(pixels: np.array, threshold_method='na'):
+def get_binary_global(pixels: np.array, threshold_method='na', min_size=5, max_size=1000):
     """
     Calculate binary global thresholding image
 
     :param pixels: np.array
     :param threshold_method: method used to perform global thresholding, enable 'na',
-                'otsu', 'yen' and 'local'
+                'otsu', 'yen', 'local-nucleoli' and 'local-sg'
+    :param min_size: minimum size of blobs
+    :param max_size: maximum size of blobs
     :return: out: 0-and-1 np.array, binary global thresholding image
     """
     if threshold_method == 'na':
@@ -65,7 +75,7 @@ def get_binary_global(pixels: np.array, threshold_method='na'):
         # one round of erosion/dilation to clear out boundary
         out = binary_erosion(out)
         out = binary_dilation(out)
-    elif threshold_method == 'local':
+    elif threshold_method == 'local-nucleoli':
         # use otsu thresholding to determine background region
         global_threshold_val = threshold_otsu(pixels)
         bg = pixels > global_threshold_val
@@ -73,14 +83,24 @@ def get_binary_global(pixels: np.array, threshold_method='na'):
         local = threshold_local(pixels, 21)  # 21: specific for nucleoli
         out = pixels > local
         # remove large connected areas
-        out = obj.remove_large(out, 1000)  # 1000: specific for nucleoli
+        out = obj.remove_large(out, max_size)
         # combine with otsu thresholding to determine background region
         out[bg == 0] = 0
         # two rounds of erosion/dilation and remove_small to clear out background
         out = binary_erosion(out)
-        out = obj.remove_small(out, 10)  # 10: specific for nucleoli
+        out = obj.remove_small(out, min_size)
         out = binary_dilation(out)
-
+    elif threshold_method == 'local-sg':
+        # use otsu thresholding to determine background region
+        global_threshold_val = threshold_otsu(pixels)
+        bg = pixels > global_threshold_val
+        # apply local thresholding
+        local = threshold_local(pixels, 21)  # 21: specific for nucleoli
+        out = pixels > local
+        # remove large connected areas
+        out = obj.remove_large(out, max_size)
+        # combine with otsu thresholding to determine background region
+        out[bg == 0] = 0
     return out
 
 
