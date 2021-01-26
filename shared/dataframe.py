@@ -25,7 +25,7 @@ def find_pos(val, increase_list: list):
     :param increase_list: list of acquisition times of each frame
     :return: out: first frame after or during photobleaching
     """
-    out = -1
+    out = len(increase_list)
     i = 0
     while i < len(increase_list):
         if val <= increase_list[i]:
@@ -81,3 +81,12 @@ def get_time_length(t_start_frame, t_end_frame, t_time):
     out = 3600*(t_end[0]-t_start[0]) + 60*(t_end[1]-t_start[1]) + (t_end[2]-t_start[2])
 
     return out
+
+
+def get_grid_pos(pos, num_grid):
+    row = pos//num_grid
+    if row % 2 == 0:
+        col = pos-row*num_grid
+    else:
+        col = num_grid-1-(pos-row*num_grid)
+    return row, col
