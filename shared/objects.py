@@ -4,8 +4,10 @@
 
 import numpy as np
 import shared.warning as warn
+import shared.dataframe as dat
 from skimage.morphology import remove_small_objects
 from skimage.measure import label, regionprops
+import math
 
 
 def remove_small(obj: np.array, min_size=10):
@@ -38,10 +40,10 @@ def remove_large(obj: np.array, max_size=1000):
         Expects ar to be an integer image array with labeled objects, and removes objects
         larger than max_size.
 
-        :param obj: nd.array, 0-and-1
+        :param obj: np.array, 0-and-1
         :param max_size: int, optional (default: 1000)
                     The largest allowable object size.
-        :return: out: nd.array, 0-and-1, same shape and type as input obj
+        :return: out: np.array, 0-and-1, same shape and type as input obj
         """
     # Raise type error if not int
     warn.check_img_supported(obj)
@@ -54,36 +56,66 @@ def remove_large(obj: np.array, max_size=1000):
     return out
 
 
-def get_centroid(obj: np.array):
+def filter_eccentricity(obj: np.array, filter_min, filter_max):
     """
-    Get list of centroids' coordinates of given image with objects.
+    filter objects based on corresponding eccentricity
 
     :param obj: np.array, 0-and-1
-    :return: obj_centroid_x: list of x coordinates
-             obj_centroid_y: list of y coordinates
+    :param filter_min: minimum allowable value for eccentricity
+    :param filter_max: maximum allowable value for eccentricity
+    :return: out: np.array, 0-and-1, same shape and type as input obj
     """
-    obj_centroid_x = []
-    obj_centroid_y = []
     label_obj = label(obj)
     obj_prop = regionprops(label_obj)
-    for i in range(len(obj_prop)):
-        obj_centroid_x.append(obj_prop[i].centroid[0])
-        obj_centroid_y.append(obj_prop[i].centroid[1])
+    out = obj.copy()
+    for i in obj_prop:
+        if (i.eccentricity <= filter_min) | (i.eccentricity > filter_max):
+            out[label_obj == i.label] = 0
 
-    return obj_centroid_x, obj_centroid_y
+    return out
 
 
-def get_size(obj: np.array):
-    """
-    Get list of 2D areas of given image with objects.
-
-    :param obj: np.array, 0-and-1
-    :return: obj_areas: list of areas
-    """
+def group_label_eccentricity(obj: np.array, lst):
     label_obj = label(obj)
-    obj_areas = np.bincount(label_obj.ravel())[1:]
+    obj_prop = regionprops(label_obj)
+    out = obj.copy()
+    for i in obj_prop:
+        pos = dat.find_pos(i.eccentricity, lst)
+        out[label_obj == i.label] = pos+1
 
-    return obj_areas
+    return out
+
+
+def filter_circularity(obj: np.array, filter_min, filter_max):
+    """
+        filter objects based on corresponding circularity
+
+        :param obj: np.array, 0-and-1
+        :param filter_min: minimum allowable value for circularity
+        :param filter_max: maximum allowable value for circularity
+        :return: out: np.array, 0-and-1, same shape and type as input obj
+        """
+    label_obj = label(obj)
+    obj_prop = regionprops(label_obj)
+    out = obj.copy()
+    for i in obj_prop:
+        circ = (4 * math.pi * i.area)/(i.perimeter ** 2)
+        if (circ <= filter_min) | (circ > filter_max):
+            out[label_obj == i.label] = 0
+
+    return out
+
+
+def group_label_circularity(obj: np.array, lst):
+    label_obj = label(obj)
+    obj_prop = regionprops(label_obj)
+    out = obj.copy()
+    for i in obj_prop:
+        circ = (4 * math.pi * i.area)/(i.perimeter ** 2)
+        pos = dat.find_pos(circ, lst)
+        out[label_obj == i.label] = pos+1
+
+    return out
 
 
 def points_in_objects(obj: np.array, points_x: list, points_y: list):
