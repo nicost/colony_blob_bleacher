@@ -188,3 +188,19 @@ def pb_correction(t_int: list, pb_factor: list):
         out.append(np.divide(t_int[i], pb_factor))
 
     return out
+
+
+def pix_stitch_same_row(pix_pd, num_grid):
+    out = pix_pd[pix_pd['col'] == 0].iloc[0]['pix']
+    for i in range(num_grid-1):
+        out = np.concatenate((out, pix_pd[pix_pd['col'] == i+1].iloc[0]['pix']), axis=1, out=None)
+
+    return out
+
+
+def pix_stitch(pix_pd, num_grid):
+    out = pix_stitch_same_row(pix_pd[pix_pd['row'] == 0], num_grid)
+    for i in range(num_grid-1):
+        out = np.concatenate((out, pix_stitch_same_row(pix_pd[pix_pd['row'] == i+1], num_grid)), axis=0, out=None)
+
+    return out
