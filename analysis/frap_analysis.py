@@ -22,7 +22,7 @@ import collections
 
 from skimage.measure import label, regionprops
 
-from shared.find_organelles import find_nucleoli
+from shared.find_organelles import find_organelle
 import shared.analysis as ana
 import shared.display as dis
 import shared.dataframe as dat
@@ -37,7 +37,8 @@ import shared.math_functions as mat
 data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/AutoBleach_15"
 
 # values
-thresholding = 'local'  # global thresholding method; choose in between 'na','otsu','yen' and 'local'; default = 'na'
+thresholding = 'local-nucleoli'
+# global thresholding method; choose in between 'na','otsu','yen', 'local-nucleoli' and 'local-sg'
 min_size = 10  # minimum nucleoli size; default = 10
 max_size = 1000  # maximum nucleoli size; default = 1000;
                  # larger ones are generally cells without nucleoli
@@ -76,12 +77,15 @@ t0 = store.get_image(cb.t(0).build())
 t0_pix = np.reshape(t0.get_raw_pixels(), newshape=[t0.get_height(), t0.get_width()])
 
 # find nucleoli
-nucleoli = find_nucleoli(t0_pix, thresholding, min_size=min_size, max_size=max_size)
+nucleoli = find_organelle(t0_pix, thresholding, min_size=min_size, max_size=max_size)
 print("Found %d nucleoli." % obj.object_count(nucleoli))
 
 # get the size and centroid of each nucleoli
-nucleoli_areas = obj.get_size(nucleoli)
-nucleoli_centroid_x, nucleoli_centroid_y = obj.get_centroid(nucleoli)
+nucleoli_label = label(nucleoli)
+nucleoli_prop = regionprops(nucleoli_label)
+nucleoli_areas = [p.area for p in nucleoli_prop]
+nucleoli_centroid_x = [p.centroid[0] for p in nucleoli_prop]
+nucleoli_centroid_y = [p.centroid[1] for p in nucleoli_prop]
 
 # nucleoli pd dataset
 nucleoli_pd = pd.DataFrame({'size': nucleoli_areas, 'centroid_x': nucleoli_centroid_x,
