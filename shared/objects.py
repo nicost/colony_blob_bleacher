@@ -76,11 +76,17 @@ def filter_eccentricity(obj: np.array, filter_min, filter_max):
 
 
 def group_label_eccentricity(obj: np.array, lst):
+    """
+    create group label image based on given bin from lst (eccentricity)
+    :param obj: np.array, 0-and-1
+    :param lst: list of bins used to bin eccentricity
+    :return: out: np.array, 0-and-1, same shape and type as input obj
+    """
     label_obj = label(obj)
     obj_prop = regionprops(label_obj)
-    out = obj.copy()
+    out = np.zeros_like(obj)
     for i in obj_prop:
-        pos = dat.find_pos(i.eccentricity, lst)
+        pos = int(dat.find_pos(i.eccentricity, lst))
         out[label_obj == i.label] = pos+1
 
     return out
@@ -107,6 +113,12 @@ def filter_circularity(obj: np.array, filter_min, filter_max):
 
 
 def group_label_circularity(obj: np.array, lst):
+    """
+        create group label image based on given bin from lst (circularity)
+        :param obj: np.array, 0-and-1
+        :param lst: list of bins used to bin circularity
+        :return: out: np.array, 0-and-1, same shape and type as input obj
+        """
     label_obj = label(obj)
     obj_prop = regionprops(label_obj)
     out = obj.copy()
