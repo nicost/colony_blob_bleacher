@@ -11,28 +11,96 @@ from skimage.measure import label
 import shared.objects as obj
 import os
 
+"""
+# ---------------------------------------------------------------------------------------------------
+# SG ANALYZER (MULTI-FOV)
+# ---------------------------------------------------------------------------------------------------
+
+EXPECTS 
+    an uManager data, 
+SEGMENTS and ANALYZES
+    SG properties (enables size, mean intensity, circularity and eccentricity) for all positions with 
+    the same time/channel/z-plane, 
+EXPORTS 
+    measurements (including position in uManager data, SG number, x, y position, size, mean intensity,
+    circularity and eccentricity) in .txt format and stitched images (raw image, SG mask, color coded
+    mean intensity/circularity/eccentricity data) in .pdf format, 
+DISPLAYS 
+    stitched images (raw image, SG mask, color coded mean_intensity/circularity/eccentricity data) in 
+    napari. 
+
+# ----------------------------------
+# PARAMETERS ALLOW CHANGE
+# ----------------------------------
+
+    # paths
+    data_path: directory of uManager data
+    save_path: primary directory for output saving
+    
+    # values for analysis
+    data_t: time/frame to be analyzed
+    data_c: channel to be analyzed
+    data_z: z-plane to be analyzed
+    thresholding: global thresholding method used for SG segmentation; only accepts 'na', 'otsu', 
+        'yen', 'local-nucleoli' and 'local-sg'
+    min_size: the smallest allowable SG size
+    max_size: the largest allowable SG size
+    
+    # modes
+    analyze_boundary: if SG fall at the boundaries of two neighbour images after image stitch are 
+        subject to analysis or not; only accepts 'N' and 'Y'
+    export_mode: enables export or not; only accepts 'N' and 'Y'
+    export_pd_pre_stitch: exports SG measurements (.txt) based on uManager position/SG number/x,y 
+        coordinates on original FOV or not; only accepts 'N' or 'Y'; 'Y' is functional only while 
+        export_mode == 'Y'
+    export_pd_post_stitch: exports SG measurements (.txt) based on uManager position/SG number/x,y
+        coordinates on stitched image or not; only accepts 'N' or 'Y'; 'Y' is functional only while 
+        export_mode == 'Y'
+    export_img: exports stitched images (.pdf) or not; only accepts 'N' or 'Y'; 'Y' is functional 
+        only while export_mode == 'Y'
+    display_mode: displays stitched images in napari or not; only accepts 'N' or 'Y'
+    
+    # color-coded (cc) images calculation (added due to time concern)
+    # Note: calculates color coded images for image export/display is the time limiting step of 
+        current codes, please toggle off corresponding features if not needed
+    cc_circ: calculates color coded circularity image or not; only accepts 'N' or 'Y'
+    cc_ecce: calculates color coded eccentricity image or not; only accepts 'N' or 'Y'
+    cc_int: calculates color coded mean intensity image or not; only accepts 'N' or 'Y'
+"""
+
 # --------------------------
-# PARAMETERS
+# PARAMETERS ALLOW CHANGE
 # --------------------------
 # paths
-# data source
 data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/SG_scoring/CX"
-# storage path
 save_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/SG_scoring/dataAnalysis/"
 
-# values
-thresholding = 'local-sg'
-# global thresholding method; choose in between 'na','otsu','yen', 'local-nucleoli' and 'local-sg'
-min_size = 5  # minimum SG size
-max_size = 350  # maximum SG size
+# values for analysis
+data_t = 0  # non-negative int, make sure within data range
+data_c = 0  # non-negative int, make sure within data range
+data_z = 0  # non-negative int, make sure within data range
+thresholding = 'local-sg'  # only accepts 'na', 'otsu', 'yen', 'local-nucleoli' and 'local-sg'
+min_size = 5  # non-negative int
+max_size = 350  # non-negative int
 
-# analyzing mode
+# modes
 analyze_boundary = 'N'  # only accepts 'N' or 'Y'
+export_mode = 'Y'  # only accepts 'N' or 'Y'
+export_pd_pre_stitch = 'Y'  # only accepts 'N' or 'Y'
+export_pd_post_stitch = 'N'  # only accepts 'N' or 'Y'
+export_img = 'Y'  # only accepts 'N' or 'Y'
+display_mode = 'Y'  # only accepts 'N' or 'Y'
 
-# display mode
-display_circ = 'Y'  # only accepts 'N' or 'Y'
-display_ecce = 'N'  # only accepts 'N' or 'Y'
-display_int = 'Y'  # only accepts 'N' or 'Y'
+# color-coded (cc) images calculation (added due to time concern)
+cc_circ = 'Y'  # only accepts 'N' or 'Y'
+cc_ecce = 'N'  # only accepts 'N' or 'Y'
+cc_int = 'Y'  # only accepts 'N' or 'Y'
+
+"""
+# ---------------------------------------------------------------------------------------------------
+# PLEASE DO NOT CHANGE AFTER THIS
+# ---------------------------------------------------------------------------------------------------
+"""
 
 # --------------------------
 # LOAD DATA
@@ -61,7 +129,7 @@ col_lst = []  # column location of given FOV in multi-FOV-grid
 pix_lst = []  # list of t(0).p(0) image for multi-FOV-display
 sg_lst = []  # list of t(0).p(0) SG mask for multi-FOV-display
 for i in range(max_p+1):
-    temp = store.get_image(cb.t(0).p(i).build())
+    temp = store.get_image(cb.t(data_t).c(data_c).z(data_z).p(i).build())
     temp_pix = np.reshape(temp.get_raw_pixels(), newshape=[temp.get_height(), temp.get_width()])
     temp_sg = find_organelle(temp_pix, thresholding, min_size=min_size, max_size=max_size)
     row, col = dat.get_grid_pos(i, num_grid)
@@ -76,113 +144,125 @@ for i in range(max_p+1):
 print("### Image analysis: Stitch image ...")
 pix_pd = pd.DataFrame({'row': row_lst, 'col': col_lst, 'pix': pix_lst})  # dataFrame of t(0).p(0) pixel images
 pix = ana.pix_stitch(pix_pd, num_grid)  # stitched image
-if analyze_boundary == 'N':
+
+if analyze_boundary not in ['Y', 'N']:
+    raise ValueError("analyze_boundary only accepts 'Y' and 'N'. Got %s" % analyze_boundary)
+elif analyze_boundary == 'N':
     sg_pix_pd = pd.DataFrame({'row': row_lst, 'col': col_lst, 'pix': sg_lst})  # dataFrame of t(0).p(0) SG masks
     sg = ana.pix_stitch(sg_pix_pd, num_grid)  # stitched SG masks (exclude boundary of each single FOV)
-elif analyze_boundary == 'Y':
+else:
     sg = find_organelle(pix, thresholding, min_size=min_size, max_size=max_size)
 sg_pd = sg_analysis(pix, sg, 0)  # SG dataFrame based on multi-FOV stitched image
 
 # --------------------------
-# OUTPUT IMAGES
+# COLOR CODED IMAGES
 # --------------------------
-print("### Generating output images: Calculate group labeled circ/ecce image ...")
-if display_circ == 'Y':
-    cmap1 = 'YlOrRd'
-    cmap1_napari = dis.num_color_colormap(cmap1, 255)[0]
-    cmap1_plt = dis.num_color_colormap(cmap1, 255)[1]
+print("### Calculate color coded circ/ecce/int images ...")
+
+cmap1 = 'YlOrRd'
+cmap1_napari = dis.num_color_colormap(cmap1, 255)[0]
+cmap1_plt = dis.num_color_colormap(cmap1, 255)[1]
+if cc_circ == 'Y':
     sg_circ = obj.obj_display_in_circularity(sg)
+else:
+    sg_circ = np.zeros_like(sg)
 
-if display_ecce == 'Y':
-    cmap2 = 'Blues'
-    cmap2_napari = dis.num_color_colormap(cmap2, 255)[0]
-    cmap2_plt = dis.num_color_colormap(cmap2, 255)[1]
+cmap2 = 'Blues'
+cmap2_napari = dis.num_color_colormap(cmap2, 255)[0]
+cmap2_plt = dis.num_color_colormap(cmap2, 255)[1]
+if cc_ecce == 'Y':
     sg_ecce = obj.obj_display_in_eccentricity(sg)
+else:
+    sg_ecce = np.zeros_like(sg)
 
-if display_int == 'Y':
-    cmap3 = 'viridis'
-    cmap3_napari = dis.num_color_colormap(cmap3, 255)[0]
-    cmap3_plt = dis.num_color_colormap(cmap3, 255)[1]
+cmap3 = 'viridis'
+cmap3_napari = dis.num_color_colormap(cmap3, 255)[0]
+cmap3_plt = dis.num_color_colormap(cmap3, 255)[1]
+if cc_int == 'Y':
     sg_int = obj.obj_display_in_intensity(sg, pix, [6, 10])
+else:
+    sg_int = np.zeros_like(sg)
 
 # --------------------------
-# OUTPUT DIR/NAMES
+# OUTPUT
 # --------------------------
-# get sample name
-sample_name = data_path.split('"')[0].split('/')[-1]
-storage_path = '%s/%s/' % (save_path, sample_name)
-if not os.path.exists(storage_path):
-    os.makedirs(storage_path)
+if export_mode == 'Y':
+    print("### Export file ...")
+    # check and create saving directory
+    sample_name = data_path.split('"')[0].split('/')[-1]
+    storage_path = '%s/%s/' % (save_path, sample_name)
+    if not os.path.exists(storage_path):
+        os.makedirs(storage_path)
 
-# --------------------------
-# OUTPUT FILE
-# --------------------------
-print("### Export file ...")
-# SG dataFrame of all FOVs based on each single FOV
-sg_fov_pd.to_csv('%s/data_single-FOV_%s.txt' % (storage_path, sample_name), index=None, sep='\t')
-sg_pd.to_csv('%s/data_multi-FOV_%s.txt' % (storage_path, sample_name), index=None, sep='\t')
+    # SG dataFrame of all FOVs based on each single FOV
+    if export_pd_pre_stitch == 'Y':
+        sg_fov_pd.to_csv('%s/data_single-FOV_%s.txt' % (storage_path, sample_name), index=False, sep='\t')
+    if export_pd_post_stitch == 'Y':
+        sg_pd.to_csv('%s/data_multi-FOV_%s.txt' % (storage_path, sample_name), index=False, sep='\t')
 
-# Images
-# stitched pixel image
-fig, ax = plt.subplots(figsize=(8*num_grid, 8*num_grid))
-ax = plt.imshow(pix, cmap='binary_r')
-ax = plt.colorbar()
-plt.savefig('%s/pix_%s.pdf' % (storage_path, sample_name))
+    # Images
+    if export_img == 'Y':
+        # stitched pixel image
+        plt.subplots(figsize=(8*num_grid, 8*num_grid))
+        plt.imshow(pix, cmap='binary_r')
+        plt.colorbar()
+        plt.savefig('%s/pix_%s.pdf' % (storage_path, sample_name))
 
-# stitched SG mask
-fig, ax = plt.subplots(figsize=(8*num_grid, 8*num_grid))
-ax = plt.imshow(sg, cmap='binary_r')
-ax = plt.colorbar()
-plt.savefig('%s/sg_%s.pdf' % (storage_path, sample_name))
+        # stitched SG mask
+        plt.subplots(figsize=(8*num_grid, 8*num_grid))
+        plt.imshow(sg, cmap='binary_r')
+        plt.colorbar()
+        plt.savefig('%s/sg_%s.pdf' % (storage_path, sample_name))
 
-# circularity
-if display_circ == 'Y':
-    fig, ax = plt.subplots(figsize=(8*num_grid, 8*num_grid))
-    ax = plt.imshow(sg_circ, cmap=cmap1_plt)
-    ax = plt.colorbar()
-    plt.savefig('%s/circularity_%s.pdf' % (storage_path, sample_name))
+        # circularity
+        if cc_circ == 'Y':
+            plt.subplots(figsize=(8*num_grid, 8*num_grid))
+            plt.imshow(sg_circ, cmap=cmap1_plt)
+            plt.colorbar()
+            plt.savefig('%s/circularity_%s.pdf' % (storage_path, sample_name))
 
-# eccentricity
-if display_ecce == 'Y':
-    fig, ax = plt.subplots(figsize=(8*num_grid, 8*num_grid))
-    ax = plt.imshow(sg_ecce, cmap=cmap2_plt)
-    ax = plt.colorbar()
-    plt.savefig('%s/eccentricity_%s.pdf' % (storage_path, sample_name))
+        # eccentricity
+        if cc_ecce == 'Y':
+            plt.subplots(figsize=(8*num_grid, 8*num_grid))
+            plt.imshow(sg_ecce, cmap=cmap2_plt)
+            plt.colorbar()
+            plt.savefig('%s/eccentricity_%s.pdf' % (storage_path, sample_name))
 
-# intensity
-if display_int == 'Y':
-    fig, ax = plt.subplots(figsize=(8 * num_grid, 8 * num_grid))
-    ax = plt.imshow(sg_int, cmap=cmap3_plt)
-    ax = plt.colorbar()
-    plt.savefig('%s/intensity_%s.pdf' % (storage_path, sample_name))
+        # intensity
+        if cc_int == 'Y':
+            plt.subplots(figsize=(8 * num_grid, 8 * num_grid))
+            plt.imshow(sg_int, cmap=cmap3_plt)
+            plt.colorbar()
+            plt.savefig('%s/intensity_%s.pdf' % (storage_path, sample_name))
 
 # --------------------------
 # OUTPUT DISPLAY
 # --------------------------
-print("### Output display ...")
-with napari.gui_qt():
-    viewer = napari.Viewer()
+if display_mode == 'Y':
+    print("### Output display ...")
+    with napari.gui_qt():
+        viewer = napari.Viewer()
 
-    # stitched pixel image
-    viewer.add_image(pix, name='data')
+        # stitched pixel image
+        viewer.add_image(pix, name='data')
 
-    # stitched SG label with properties
-    sg_properties = {
-        'size': ['none'] + list(sg_pd['size']),  # background is size: none
-        'int': ['none'] + list(sg_pd['int']),
-        'circ': ['none'] + list(sg_pd['circ']),
-        'eccentricity': ['none'] + list(sg_pd['eccentricity'])
-    }
-    viewer.add_labels(label(sg), name='SG label', properties=sg_properties, num_colors=3)
+        # stitched SG label with properties
+        sg_properties = {
+            'size': ['none'] + list(sg_pd['size']),  # background is size: none
+            'int': ['none'] + list(sg_pd['int']),
+            'circ': ['none'] + list(sg_pd['circ']),
+            'eccentricity': ['none'] + list(sg_pd['eccentricity'])
+        }
+        viewer.add_labels(label(sg), name='SG label', properties=sg_properties, num_colors=3)
 
-    # circularity
-    if display_circ == 'Y':
-        viewer.add_image(sg_circ, name='circ', colormap=('cmap1', cmap1_napari))
+        # circularity
+        if cc_circ == 'Y':
+            viewer.add_image(sg_circ, name='circ', colormap=('cmap1', cmap1_napari))
 
-    # eccentricity
-    if display_ecce == 'Y':
-        viewer.add_image(sg_ecce, name='ecce', colormap=('cmap2', cmap2_napari))
+        # eccentricity
+        if cc_ecce == 'Y':
+            viewer.add_image(sg_ecce, name='ecce', colormap=('cmap2', cmap2_napari))
 
-    # intensity
-    if display_int == 'Y':
-        viewer.add_image(sg_int, name='int', colormap=('cmap3', cmap3_napari))
+        # intensity
+        if cc_int == 'Y':
+            viewer.add_image(sg_int, name='int', colormap=('cmap3', cmap3_napari))
