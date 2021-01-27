@@ -2,8 +2,6 @@
 # FUNCTIONS for NON 0-AND-1 NP.ARRAY (IMAGE)
 # ------------------------------------------
 
-from typing import List
-
 import numpy as np
 from skimage.feature import peak_local_max
 from skimage.filters import rank, threshold_triangle
@@ -16,8 +14,8 @@ DEFAULT = object()
 
 def bleach_location(pre_pixels: np.array,
                     post_pixels: np.array,
-                    expected_position = DEFAULT,
-                    half_roi_size = DEFAULT):
+                    expected_position=DEFAULT,
+                    half_roi_size=DEFAULT):
     """
     Finds the location of a bright spot in the post_pixels image
     The pre_pixel image will be subtracted from the pos_pixel image (after adding
@@ -27,7 +25,7 @@ def bleach_location(pre_pixels: np.array,
     :param pre_pixels:
     :param post_pixels:
     :param expected_position: tuple[int, int] with expected position
-    :param half_roi_size: tuple[int, int] area aruond expected_position to be searched for spot
+    :param half_roi_size: tuple[int, int] area around expected_position to be searched for spot
     :return:
     """
     # assume pre and post are the same size
