@@ -56,76 +56,79 @@ def remove_large(obj: np.array, max_size=1000):
     return out
 
 
-def filter_eccentricity(obj: np.array, filter_min, filter_max):
+def obj_display_in_eccentricity(obj: np.array):
     """
-    filter objects based on corresponding eccentricity
+    generate object image based on eccentricity value
 
     :param obj: np.array, 0-and-1
-    :param filter_min: minimum allowable value for eccentricity
-    :param filter_max: maximum allowable value for eccentricity
-    :return: out: np.array, 0-and-1, same shape and type as input obj
+    :return: out: np.array, 0 - 255 int8 format, same shape and type as input obj
     """
     label_obj = label(obj)
     obj_prop = regionprops(label_obj)
-    out = obj.copy()
+    out = np.zeros_like(obj, dtype=float)
     for i in obj_prop:
-        if (i.eccentricity <= filter_min) | (i.eccentricity > filter_max):
-            out[label_obj == i.label] = 0
+        ecce = i.eccentricity
+        # convert values to 0 - 255 int8 format with (0,1.0) as color dynamic range
+        top_ecce = 1.0
+        if ecce > top_ecce:
+            out[label_obj == i.label] = 255
+        else:
+            out[label_obj == i.label] = ecce * 255 / top_ecce
+
+    out = out.astype('uint8')
 
     return out
 
 
-def group_label_eccentricity(obj: np.array, lst):
+def obj_display_in_circularity(obj: np.array):
     """
-    create group label image based on given bin from lst (eccentricity)
+    generate object image based on circularity value
+
     :param obj: np.array, 0-and-1
-    :param lst: list of bins used to bin eccentricity
-    :return: out: np.array, 0-and-1, same shape and type as input obj
+    :return: out: np.array, 0 - 255 int8 format, same shape and type as input obj
     """
     label_obj = label(obj)
     obj_prop = regionprops(label_obj)
-    out = np.zeros_like(obj)
+    out = np.zeros_like(obj, dtype=float)
     for i in obj_prop:
-        pos = int(dat.find_pos(i.eccentricity, lst))
-        out[label_obj == i.label] = pos+1
+        # convert values to 0 - 255 int8 format with (0,1.0) as color dynamic range
+        if i.area >= 50:  # only calculate for area>50 organelle
+            circ = (4 * math.pi * i.area) / (i.perimeter ** 2)
+            top_circ = 1.0
+            if circ > top_circ:
+                out[label_obj == i.label] = 255
+            else:
+                out[label_obj == i.label] = circ * 255 / top_circ
+
+    out = out.astype('uint8')
 
     return out
 
 
-def filter_circularity(obj: np.array, filter_min, filter_max):
+def obj_display_in_intensity(obj: np.array, pixels: np.array, int_range):
     """
-        filter objects based on corresponding circularity
+    generate object image based on intensity value
 
-        :param obj: np.array, 0-and-1
-        :param filter_min: minimum allowable value for circularity
-        :param filter_max: maximum allowable value for circularity
-        :return: out: np.array, 0-and-1, same shape and type as input obj
-        """
+    :param obj: np.array, 0-and-1
+    :param pixels: np.array, corresponding grey scale image
+    :param int_range: intensity range
+    :return: out: np.array, 0 - 255 int8 format, same shape and type as input obj
+    """
     label_obj = label(obj)
-    obj_prop = regionprops(label_obj)
-    out = obj.copy()
+    obj_prop = regionprops(label_obj, pixels)
+    out = np.zeros_like(obj, dtype=float)
     for i in obj_prop:
-        circ = (4 * math.pi * i.area)/(i.perimeter ** 2)
-        if (circ <= filter_min) | (circ > filter_max):
+        mean_int = np.log(i.mean_intensity)
+        # convert values to 0 - 255 int8 format with (0,1.0) as color dynamic range
+        top_int = int_range[1]
+        if mean_int > top_int:
+            out[label_obj == i.label] = 255
+        elif mean_int < int_range[0]:
             out[label_obj == i.label] = 0
+        else:
+            out[label_obj == i.label] = mean_int * 255 / top_int
 
-    return out
-
-
-def group_label_circularity(obj: np.array, lst):
-    """
-        create group label image based on given bin from lst (circularity)
-        :param obj: np.array, 0-and-1
-        :param lst: list of bins used to bin circularity
-        :return: out: np.array, 0-and-1, same shape and type as input obj
-        """
-    label_obj = label(obj)
-    obj_prop = regionprops(label_obj)
-    out = obj.copy()
-    for i in obj_prop:
-        circ = (4 * math.pi * i.area)/(i.perimeter ** 2)
-        pos = dat.find_pos(circ, lst)
-        out[label_obj == i.label] = pos+1
+    out = out.astype('uint8')
 
     return out
 
