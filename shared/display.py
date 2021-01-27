@@ -5,15 +5,17 @@
 import numpy as np
 from matplotlib import cm
 from vispy.color import Colormap
+from matplotlib.colors import ListedColormap
 
 
-def num_color_colormap(cmap_name, num: int):
+def num_color_colormap(cmap_name, num: int, bg_color=[0.0, 0.0, 0.0, 0.0]):
     """
     Generate num-color colormap from available matplotlib cmap.
 
     :param cmap_name: matplotlib cmap name
     :param num: non negative int, can not be zero
-    :return: num_color_cmap: generated num-color colormap
+    :return: cmap_napari: generated num-color colormap for napari display
+             cmap_plt: generated num-color colormap for matplotlib display
              rgba: colormap array (without background)
     """
     cmap = cm.get_cmap(cmap_name)
@@ -21,10 +23,11 @@ def num_color_colormap(cmap_name, num: int):
         raise ValueError("0 or negative values cannot be used to generate n-color colormap.")
     else:
         rgba = cmap(np.arange(0, 1, 1/num))
-        rgba = np.insert(rgba, 0, [0.0, 0.0, 0.0, 0.0], axis=0)
-        num_color_cmap = Colormap(rgba)
+        rgba = np.insert(rgba, 0, bg_color, axis=0)
+        cmap_napari = Colormap(rgba)
+        cmap_plt = ListedColormap(rgba)
 
-    return num_color_cmap, rgba
+    return cmap_napari, cmap_plt, rgba
 
 
 def sorted_num_color_colormap(num_color_rgba, pd, sort_name, obj_name):
@@ -35,7 +38,8 @@ def sorted_num_color_colormap(num_color_rgba, pd, sort_name, obj_name):
     :param pd: pandas.dataFrame with the same length as the colormap number
     :param sort_name: name of the column in pd used for sorting
     :param obj_name: name of the column in pd used for ploting
-    :return: num_color_cmap: sorted colormap
+    :return: cmap_napari: generated num-color colormap for napari display
+             cmap_plt: generated num-color colormap for matplotlib display
              rgba: colormap array (without background)
     """
     pd_sort = pd.sort_values(by=sort_name).reset_index(drop=True)
@@ -43,9 +47,10 @@ def sorted_num_color_colormap(num_color_rgba, pd, sort_name, obj_name):
     rgba = [num_color_rgba[0]]
     for i in pd_sort.sort_values(by=obj_name).index.tolist():
         rgba.append(num_color_rgba[i+1])
-    num_color_cmap = Colormap(rgba)
+    cmap_napari = Colormap(rgba)
+    cmap_plt = ListedColormap(rgba)
 
-    return num_color_cmap, rgba
+    return cmap_napari, cmap_plt, rgba
 
 
 
