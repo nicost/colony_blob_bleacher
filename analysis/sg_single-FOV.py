@@ -26,7 +26,7 @@ max_size = 350  # maximum SG size
 pos = 2
 
 # --------------------------
-# LOAD MOVIE
+# LOAD DATA
 # --------------------------
 print("### Load data ...")
 # build up pycromanager bridge
@@ -53,24 +53,23 @@ sg = find_organelle(pix, thresholding, min_size=min_size, max_size=max_size)
 sg_pd = sg_analysis(pix, sg, 0)
 
 # --------------------------
-# COLORMAP
+# OUTPUT IMAGES
 # --------------------------
+print("### Generating output images: Calculate group labeled circ/ecce image ...")
 # colormap: circularity
 cmap1 = 'YlOrRd'
 cmap1_napari = dis.num_color_colormap(cmap1, 100)[0]
 cmap1_plt = dis.num_color_colormap(cmap1, 100)[1]
+# circ image
+num_interval = 10  # do not change
+range_lst1 = np.arange(0, 1 + 1 / num_interval, 1 / num_interval)
+sg_circ = obj.group_label_circularity(sg, range_lst1)
+
 # colormap: eccentricity
 cmap2 = 'Blues'
 cmap2_napari = dis.num_color_colormap(cmap2, 100)[0]
 cmap2_plt = dis.num_color_colormap(cmap2, 100)[1]
-
-# --------------------------
-# OUTPUT IMAGES
-# --------------------------
-print("### Generating output images: Calculate group labeled circ/ecce image ...")
-num_interval = 10  # do not change
-range_lst1 = np.arange(0, 1 + 1 / num_interval, 1 / num_interval)
-sg_circ = obj.group_label_circularity(sg, range_lst1)
+# ecce image
 range_lst2 = [0, 0.2, 0.4, 0.5, 0.6, 0.7, 0.8, 0.85, 0.9, 0.95, 1.0]
 sg_ecce = obj.group_label_eccentricity(sg, range_lst2)
 
