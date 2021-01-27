@@ -87,13 +87,13 @@ max_size = 350  # non-negative int
 analyze_boundary = 'N'  # only accepts 'N' or 'Y'
 export_mode = 'Y'  # only accepts 'N' or 'Y'
 export_pd_pre_stitch = 'Y'  # only accepts 'N' or 'Y'
-export_pd_post_stitch = 'N'  # only accepts 'N' or 'Y'
+export_pd_post_stitch = 'Y'  # only accepts 'N' or 'Y'
 export_img = 'Y'  # only accepts 'N' or 'Y'
 display_mode = 'Y'  # only accepts 'N' or 'Y'
 
 # color-coded (cc) images calculation (added due to time concern)
 cc_circ = 'Y'  # only accepts 'N' or 'Y'
-cc_ecce = 'N'  # only accepts 'N' or 'Y'
+cc_ecce = 'Y'  # only accepts 'N' or 'Y'
 cc_int = 'Y'  # only accepts 'N' or 'Y'
 
 """
@@ -137,9 +137,9 @@ for i in range(max_p+1):
     col_lst.append(col)
     pix_lst.append(temp_pix)
     sg_lst.append(temp_sg)
-
-    temp_sg_pd = sg_analysis(temp_pix, temp_sg, i)
-    sg_fov_pd = pd.concat([sg_fov_pd, temp_sg_pd], ignore_index=True)
+    if export_pd_pre_stitch == 'Y':
+        temp_sg_pd = sg_analysis(temp_pix, temp_sg, i)
+        sg_fov_pd = pd.concat([sg_fov_pd, temp_sg_pd], ignore_index=True)
 
 print("### Image analysis: Stitch image ...")
 pix_pd = pd.DataFrame({'row': row_lst, 'col': col_lst, 'pix': pix_lst})  # dataFrame of t(0).p(0) pixel images
@@ -152,7 +152,10 @@ elif analyze_boundary == 'N':
     sg = ana.pix_stitch(sg_pix_pd, num_grid)  # stitched SG masks (exclude boundary of each single FOV)
 else:
     sg = find_organelle(pix, thresholding, min_size=min_size, max_size=max_size)
-sg_pd = sg_analysis(pix, sg, 0)  # SG dataFrame based on multi-FOV stitched image
+
+sg_pd = pd.DataFrame()  # SG dataFrame based on multi-FOV stitched image
+if export_pd_post_stitch == 'Y':
+    sg_pd = sg_analysis(pix, sg, 0)
 
 # --------------------------
 # COLOR CODED IMAGES
