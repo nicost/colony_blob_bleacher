@@ -8,7 +8,7 @@ from vispy.color import Colormap
 from matplotlib.colors import ListedColormap
 
 
-def num_color_colormap(cmap_name, num: int, bg_color=[0.0, 0.0, 0.0, 0.0]):
+def num_color_colormap(cmap_name, num: int, bg_color=None):
     """
     Generate num-color colormap from available matplotlib cmap.
 
@@ -19,6 +19,9 @@ def num_color_colormap(cmap_name, num: int, bg_color=[0.0, 0.0, 0.0, 0.0]):
              cmap_plt: generated num-color colormap for matplotlib display
              rgba: colormap array (without background)
     """
+    if bg_color is None:
+        bg_color = [0.0, 0.0, 0.0, 0.0]
+
     cmap = cm.get_cmap(cmap_name)
     if num <= 0:
         raise ValueError("0 or negative values cannot be used to generate n-color colormap.")
@@ -38,7 +41,7 @@ def sorted_num_color_colormap(num_color_rgba, pd, sort_name, obj_name):
     :param num_color_rgba: num-color colormap array
     :param pd: pandas.dataFrame with the same length as the colormap number
     :param sort_name: name of the column in pd used for sorting
-    :param obj_name: name of the column in pd used for ploting
+    :param obj_name: name of the column in pd used for plotting
     :return: cmap_napari: generated num-color colormap for napari display
              cmap_plt: generated num-color colormap for matplotlib display
              rgba: colormap array (without background)
@@ -52,6 +55,3 @@ def sorted_num_color_colormap(num_color_rgba, pd, sort_name, obj_name):
     cmap_plt = ListedColormap(rgba)
 
     return cmap_napari, cmap_plt, rgba
-
-
-
