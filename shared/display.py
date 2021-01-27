@@ -12,6 +12,7 @@ def num_color_colormap(cmap_name, num: int, bg_color=[0.0, 0.0, 0.0, 0.0]):
     """
     Generate num-color colormap from available matplotlib cmap.
 
+    :param bg_color:
     :param cmap_name: matplotlib cmap name
     :param num: non negative int, can not be zero
     :return: cmap_napari: generated num-color colormap for napari display
