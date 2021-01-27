@@ -13,7 +13,7 @@ def remove_small(obj: np.array, min_size=10):
     """
     Remove objects smaller than the specified size.
 
-    Expects ar to be an integer image array with labeled objects, and removes objects
+    Expects obj to be an integer image array with labeled objects, and removes objects
     smaller than min_size.
 
     :param obj: np.array, 0-and-1
@@ -62,7 +62,7 @@ def obj_display_in_eccentricity(obj: np.array):
     :param obj: np.array, 0-and-1
     :return: out: np.array, 0 - 255 int8 format, same shape and type as input obj
     """
-    label_obj = label(obj)
+    label_obj = label(obj, connectivity=1)
     obj_prop = regionprops(label_obj)
     out = np.zeros_like(obj, dtype=float)
     for i in obj_prop:
@@ -86,7 +86,7 @@ def obj_display_in_circularity(obj: np.array):
     :param obj: np.array, 0-and-1
     :return: out: np.array, 0 - 255 int8 format, same shape and type as input obj
     """
-    label_obj = label(obj)
+    label_obj = label(obj, connectivity=1)
     obj_prop = regionprops(label_obj)
     out = np.zeros_like(obj, dtype=float)
     for i in obj_prop:
@@ -113,7 +113,7 @@ def obj_display_in_intensity(obj: np.array, pixels: np.array, int_range):
     :param int_range: intensity range
     :return: out: np.array, 0 - 255 int8 format, same shape and type as input obj
     """
-    label_obj = label(obj)
+    label_obj = label(obj, connectivity=1)
     obj_prop = regionprops(label_obj, pixels)
     out = np.zeros_like(obj, dtype=float)
     for i in obj_prop:
@@ -142,7 +142,7 @@ def points_in_objects(obj: np.array, points_x: list, points_y: list):
     :return: out: list of correlated objects' numbers.
     """
     out = []
-    label_obj = label(obj)
+    label_obj = label(obj, connectivity=1)
     if len(points_x) == len(points_y):
         for i in range(len(points_x)):
             out.append(label_obj[points_y[i], points_x[i]] - 1)
@@ -159,7 +159,7 @@ def object_count(obj: np.array):
     :param obj: np.array, 0-and-1
     :return: count_obj: number of objects.
     """
-    label_obj = label(obj)
+    label_obj = label(obj, connectivity=1)
     obj_prop = regionprops(label_obj)
     count_obj = len(obj_prop)
 
