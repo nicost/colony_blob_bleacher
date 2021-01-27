@@ -4,7 +4,6 @@
 
 import numpy as np
 import shared.warning as warn
-import shared.dataframe as dat
 from skimage.morphology import remove_small_objects
 from skimage.measure import label, regionprops
 import math
@@ -58,7 +57,7 @@ def remove_large(obj: np.array, max_size=1000):
 
 def obj_display_in_eccentricity(obj: np.array):
     """
-    generate object image based on eccentricity value
+    generate color image based on eccentricity value
 
     :param obj: np.array, 0-and-1
     :return: out: np.array, 0 - 255 int8 format, same shape and type as input obj
@@ -82,7 +81,7 @@ def obj_display_in_eccentricity(obj: np.array):
 
 def obj_display_in_circularity(obj: np.array):
     """
-    generate object image based on circularity value
+    generate color image based on circularity value
 
     :param obj: np.array, 0-and-1
     :return: out: np.array, 0 - 255 int8 format, same shape and type as input obj
@@ -107,7 +106,7 @@ def obj_display_in_circularity(obj: np.array):
 
 def obj_display_in_intensity(obj: np.array, pixels: np.array, int_range):
     """
-    generate object image based on intensity value
+    generate color image based on intensity value
 
     :param obj: np.array, 0-and-1
     :param pixels: np.array, corresponding grey scale image
