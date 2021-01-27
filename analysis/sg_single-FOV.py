@@ -65,7 +65,7 @@ min_size = 5
 max_size = 350
 
 # modes
-export_mode = 'Y'
+export_mode = 'N'
 display_mode = 'Y'
 
 """
