@@ -10,11 +10,9 @@ from pycromanager import Bridge
 
 from matplotlib.backends.qt_compat import QtCore, QtWidgets
 if QtCore.qVersion() >= "5.":
-    from matplotlib.backends.backend_qt5agg import (
-        FigureCanvas, NavigationToolbar2QT as NavigationToolbar)
+    from matplotlib.backends.backend_qt5agg import FigureCanvas
 else:
-    from matplotlib.backends.backend_qt4agg import (
-        FigureCanvas, NavigationToolbar2QT as NavigationToolbar)
+    from matplotlib.backends.backend_qt4agg import FigureCanvas
 
 from matplotlib.figure import Figure
 from vispy.color import Colormap
@@ -33,7 +31,7 @@ import shared.math_functions as mat
 # PARAMETERS
 # --------------------------
 # data source
-# data_path = "C:\\Users\\NicoLocal\\Images\\Jess\\20201116-Nucleoili-bleaching-4x\\PythonAcq1\\AutoBleach_15"
+# data_path = "C:\\Users\\NicoLocal\\Images\\Jess\\20201116-Nucleoli-bleaching-4x\\PythonAcq1\\AutoBleach_15"
 data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/AutoBleach_15"
 
 # values
@@ -173,7 +171,7 @@ movies = np.stack(t_pixels, axis=0)
 
 real_time = []
 for i in range(max_t):
-    real_time.append(dat.get_time_length(0,i,t_time))
+    real_time.append(dat.get_time_length(0, i, t_time))
 
 # --------------------------
 # FRAP CURVE CORRECTION
@@ -310,7 +308,7 @@ pointer_ft = dat.add_columns(pointer_ft, ['single_exp_fit', 'single_exp_r2', 'si
 # --------------------------
 # OUTPUT FILE
 # --------------------------
-pointer_ft.to_csv('%s/data_full.txt'% data_path, index=None, sep='\t')
+pointer_ft.to_csv('%s/data_full.txt' % data_path, index=False, sep='\t')
 pointer_out = pd.DataFrame({'x': pointer_ft['x'],
                             'y': pointer_ft['y'],
                             'corresponding_nucleoli_size': pointer_ft['size'],
@@ -322,7 +320,7 @@ pointer_out = pd.DataFrame({'x': pointer_ft['x'],
                             'single_exp_r2': pointer_ft['single_exp_r2'],
                             'single_exp_mobile_fraction': pointer_ft['single_exp_mobile_fraction'],
                             'single_exp_t_half': pointer_ft['single_exp_t_half']})
-pointer_out.to_csv('%s/data.txt'% data_path, index=None, sep='\t')
+pointer_out.to_csv('%s/data.txt' % data_path, index=False, sep='\t')
 
 # --------------------------
 # OUTPUT DISPLAY
@@ -395,7 +393,8 @@ with napari.gui_qt():
     # Plot-right: FRAP curves of filtered analysis spots after intensity correction 
     # absolute intensity, bleach time zero aligned
     for i in range(len(pointer_sort)):
-        ax2.plot(np.arange(len(pointer_sort['mean_int_post'][i])), pointer_sort['mean_int_post'][i], color=rgba_winter[i])
+        ax2.plot(np.arange(len(pointer_sort['mean_int_post'][i])), 
+        pointer_sort['mean_int_post'][i], color=rgba_winter[i])
     ax2.set_title('FRAP curves')
     ax2.set_xlabel('time')
     ax2.set_ylabel('intensity')
