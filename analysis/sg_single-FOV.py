@@ -8,22 +8,71 @@ from skimage.measure import label
 import shared.objects as obj
 import os
 
+"""
+# ---------------------------------------------------------------------------------------------------
+# SG ANALYZER (SINGLE-FOV)
+# ---------------------------------------------------------------------------------------------------
+
+EXPECTS 
+    an uManager data, 
+SEGMENTS and ANALYZES
+    SG properties (enables size, mean intensity, circularity and eccentricity) for single FOV based 
+    on given position/time/channel/z-plane information,
+EXPORTS 
+    measurements (including SG number, x, y position, size, mean intensity, circularity and eccentricity) 
+    in .txt format and images (raw image, SG mask, color coded mean intensity/circularity/eccentricity 
+    data) in .pdf format, 
+DISPLAYS 
+    images (raw image, SG mask, color coded mean_intensity/circularity/eccentricity data) in napari. 
+
+# ----------------------------------
+# PARAMETERS ALLOW CHANGE
+# ----------------------------------
+
+    # paths
+    data_path: directory of uManager data
+    save_path: primary directory for output saving
+
+    # values for analysis
+    data_p: position to be analyzed
+    data_t: time/frame to be analyzed
+    data_c: channel to be analyzed
+    data_z: z-plane to be analyzed
+    thresholding: global thresholding method used for SG segmentation; only accepts 'na', 'otsu', 
+        'yen', 'local-nucleoli' and 'local-sg'
+    min_size: the smallest allowable SG size
+    max_size: the largest allowable SG size
+
+    # modes
+    export_mode: enables export or not; only accepts 'N' and 'Y'
+    display_mode: displays stitched images in napari or not; only accepts 'N' or 'Y'
+"""
+
 # --------------------------
-# PARAMETERS
+# PARAMETERS ALLOW CHANGE
 # --------------------------
 # paths
-# data source
 data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/SG_scoring/WT"
-# storage path
 save_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/SG_scoring/dataAnalysis"
 
-# values
-thresholding = 'local-sg'
-# global thresholding method; choose in between 'na','otsu','yen', 'local-nucleoli' and 'local-sg'
-min_size = 5  # minimum SG size
-max_size = 350  # maximum SG size
-# analyzing position
-pos = 2
+# values for analysis
+data_p = 2
+data_t = 0
+data_c = 0
+data_z = 0
+thresholding = 'local-sg'  # only accepts 'na', 'otsu', 'yen', 'local-nucleoli' and 'local-sg'
+min_size = 5
+max_size = 350
+
+# modes
+export_mode = 'Y'
+display_mode = 'Y'
+
+"""
+# ---------------------------------------------------------------------------------------------------
+# PLEASE DO NOT CHANGE AFTER THIS
+# ---------------------------------------------------------------------------------------------------
+"""
 
 # --------------------------
 # LOAD DATA
@@ -46,16 +95,16 @@ cb.t(0).p(0).c(0).z(0)
 # ------------------------------
 print("### Image analysis: calculate SG mask/pd ...")
 # test image of position
-temp = store.get_image(cb.t(0).p(pos).build())
+temp = store.get_image(cb.t(data_t).c(data_c).z(data_z).p(data_p).build())
 pix = np.reshape(temp.get_raw_pixels(), newshape=[temp.get_height(), temp.get_width()])
 
 sg = find_organelle(pix, thresholding, min_size=min_size, max_size=max_size)
 sg_pd = sg_analysis(pix, sg, 0)
 
 # --------------------------
-# OUTPUT IMAGES
+# COLOR CODED IMAGES
 # --------------------------
-print("### Generating output images: Calculate group labeled circ/ecce/int image ...")
+print("### Calculate color coded circ/ecce/int image ...")
 # circ image
 cmap1 = 'YlOrRd'
 cmap1_napari = dis.num_color_colormap(cmap1, 255)[0]
@@ -75,83 +124,70 @@ cmap3_plt = dis.num_color_colormap(cmap3, 255)[1]
 sg_int = obj.obj_display_in_intensity(sg, pix, [6, 10])
 
 # --------------------------
-# OUTPUT DIR/NAMES
+# OUTPUT
 # --------------------------
-"""
-# get sample name
-sample_name = data_path.split('"')[0].split('/')[-1]
-storage_path = '%s/%s_pos%s/' % (save_path, sample_name, pos)
-if not os.path.exists(storage_path):
-    os.makedirs(storage_path)
-"""
+if export_mode == 'Y':
+    print("### Export file ...")
 
-# --------------------------
-# OUTPUT FILE
-# --------------------------
-"""
-print("### Export file ...")
-sg_pd.to_csv('%s/data_%s_pos%s.txt' % (storage_path, sample_name, pos), index=None, sep='\t')
+    # check and create saving directory
+    sample_name = data_path.split('"')[0].split('/')[-1]
+    storage_path = '%s/%s_pos%s/' % (save_path, sample_name, data_p)
+    if not os.path.exists(storage_path):
+        os.makedirs(storage_path)
 
-fig, ax = plt.subplots(figsize=(8, 8))
-ax = plt.imshow(pix, cmap='binary_r')
-ax = plt.colorbar()
-plt.savefig('%s/pix_%s_pos%s.pdf' % (storage_path, sample_name, pos))
+    # export measurements (.txt)
+    sg_pd.to_csv('%s/data_%s_pos%s.txt' % (storage_path, sample_name, data_p), index=False, sep='\t')
 
-fig, ax = plt.subplots(figsize=(8, 8))
-ax = plt.imshow(sg, cmap='binary_r')
-ax = plt.colorbar()
-plt.savefig('%s/sg_%s_pos%s.pdf' % (storage_path, sample_name, pos))
+    # export images (.pdf)
+    plt.subplots(figsize=(8, 8))
+    plt.imshow(pix, cmap='binary_r')
+    plt.colorbar()
+    plt.savefig('%s/pix_%s_pos%s.pdf' % (storage_path, sample_name, data_p))
 
-fig, ax = plt.subplots(figsize=(8, 8))
-ax = plt.imshow(sg_circ, cmap=cmap1_plt)
-ax = plt.colorbar()
-plt.savefig('%s/circularity_%s_pos%s.pdf' % (storage_path, sample_name, pos))
+    plt.subplots(figsize=(8, 8))
+    plt.imshow(sg, cmap='binary_r')
+    plt.colorbar()
+    plt.savefig('%s/sg_%s_pos%s.pdf' % (storage_path, sample_name, data_p))
 
-fig, ax = plt.subplots(figsize=(8, 8))
-ax = plt.imshow(sg_ecce, cmap=cmap2_plt)
-ax = plt.colorbar()
-plt.savefig('%s/eccentricity_%s_pos%s.pdf' % (storage_path, sample_name, pos))
+    plt.subplots(figsize=(8, 8))
+    plt.imshow(sg_circ, cmap=cmap1_plt)
+    plt.colorbar()
+    plt.savefig('%s/circularity_%s_pos%s.pdf' % (storage_path, sample_name, data_p))
 
-fig, ax = plt.subplots(figsize=(8, 8))
-ax = plt.imshow(sg_int, cmap=cmap3_plt)
-ax = plt.colorbar()
-plt.savefig('%s/intensity_%s_pos%s.pdf' % (storage_path, sample_name, pos))
-"""
+    plt.subplots(figsize=(8, 8))
+    plt.imshow(sg_ecce, cmap=cmap2_plt)
+    plt.colorbar()
+    plt.savefig('%s/eccentricity_%s_pos%s.pdf' % (storage_path, sample_name, data_p))
+
+    plt.subplots(figsize=(8, 8))
+    plt.imshow(sg_int, cmap=cmap3_plt)
+    plt.colorbar()
+    plt.savefig('%s/intensity_%s_pos%s.pdf' % (storage_path, sample_name, data_p))
 
 # --------------------------
 # OUTPUT DISPLAY
 # --------------------------
-print("### Output display ...")
-with napari.gui_qt():
-    viewer = napari.Viewer()
-    viewer.add_image(pix, name='data')
+if display_mode == 'Y':
+    print("### Output display ...")
+    with napari.gui_qt():
+        viewer = napari.Viewer()
+        viewer.add_image(pix, name='data')
 
-    sg_properties = {
-        'size': ['none'] + list(sg_pd['size']),  # background is size: none
-        'circ': ['none'] + list(sg_pd['circ']),
-        'eccentricity': ['none'] + list(sg_pd['eccentricity'])
-    }
-    viewer.add_labels(label(sg), name='SG label', properties=sg_properties, num_colors=3)
+        sg_properties = {
+            'size': ['none'] + list(sg_pd['size']),  # background is size: none
+            'circ': ['none'] + list(sg_pd['circ']),
+            'eccentricity': ['none'] + list(sg_pd['eccentricity'])
+        }
+        viewer.add_labels(label(sg), name='SG label', properties=sg_properties, num_colors=3)
 
-    viewer.add_image(sg_circ, name='circ', colormap=('cmap1', cmap1_napari))
-    viewer.add_image(sg_ecce, name='ecce', colormap=('cmap2', cmap2_napari))
-    viewer.add_image(sg_int, name='int',  colormap=('cmap3', cmap3_napari))
+        viewer.add_image(sg_circ, name='circ', colormap=('cmap1', cmap1_napari))
+        viewer.add_image(sg_ecce, name='ecce', colormap=('cmap2', cmap2_napari))
+        viewer.add_image(sg_int, name='int',  colormap=('cmap3', cmap3_napari))
 
-    """
-    # color coded based on sequential sorting
-    # eccentricity
-    rgba_cmap = dis.num_color_colormap(cmap, len(sg_pd))[1]
-    cmap_woBg = dis.sorted_num_color_colormap(rgba_cmap, sg_pd, 'eccentricity', 'sg')[0]
-    if len(sg) != 0:
-        viewer.add_image(label(sg), name='SG-ecce', colormap=('cmap woBg', cmap_woBg))
-
-    # circularity
-    cmap_woBg = dis.sorted_num_color_colormap(rgba_cmap, sg_pd, 'circ', 'sg')[0]
-    if len(sg) != 0:
-        viewer.add_image(label(sg), name='SG-circ', colormap=('cmap woBg', cmap_woBg))
-
-    # solidity
-    cmap_woBg = dis.sorted_num_color_colormap(rgba_cmap, sg_pd, 'solidity', 'sg')[0]
-    if len(sg) != 0:
-        viewer.add_image(label(sg), name='SG-soli', colormap=('cmap woBg', cmap_woBg))
-    """
+        """
+        # color coded based on sequential sorting
+        # circularity
+        cmap_woBg = dis.sorted_num_color_colormap(rgba_cmap, sg_pd, 'circ', 'sg')[0]
+        if len(sg) != 0:
+            viewer.add_image(label(sg), name='SG-circ', colormap=('cmap woBg', cmap_woBg))
+        """
