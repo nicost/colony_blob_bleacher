@@ -67,7 +67,7 @@ def find_organelle(pixels: np.array, global_thresholding='na', extreme_val=500, 
 
 
 def sg_analysis(pixels: np.array, sg, pos):
-    label_sg = label(sg)
+    label_sg = label(sg, connectivity=1)
     sg_prop = regionprops(label_sg)
     sg_prop_int = regionprops(label_sg, pixels)
     sg_areas = [p.area for p in sg_prop]
