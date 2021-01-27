@@ -14,7 +14,7 @@ import math
 
 
 def find_organelle(pixels: np.array, global_thresholding='na', extreme_val=500, bg_val=200,
-                  min_size=5, max_size=1000):
+                   min_size=5, max_size=1000):
     """
     Find organelle(nucleoli or SG) from a given image.
 
@@ -48,11 +48,13 @@ def find_organelle(pixels: np.array, global_thresholding='na', extreme_val=500, 
 
     # Check global thresholding options
     # Raise value error if not 'na', 'otsu' or 'yen'
-    warn.check_input_supported(global_thresholding, ['na', 'otsu', 'yen', 'local-nucleoli', 'local-sg'])
+    check_lst = ['na', 'otsu', 'yen', 'local-nucleoli', 'local-sg']
+    if global_thresholding not in check_lst:
+        raise ValueError("global thresholding method only accepts %s. Got %s" % (check_lst, global_thresholding))
 
     # find nucleoli
     organelle = find_blobs(pixels, get_binary_global(pixels, global_thresholding, min_size, max_size),
-                          extreme_val, bg_val, max_size)
+                           extreme_val, bg_val, max_size)
 
     # Nucleoli filters:
     # Location filter: remove artifacts connected to image border
@@ -84,4 +86,3 @@ def sg_analysis(pixels: np.array, sg, pos):
                           'int': sg_mean_int, 'circ': sg_circ, 'eccentricity': sg_eccentricity})
 
     return sg_pd
-
