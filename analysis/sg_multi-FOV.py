@@ -32,6 +32,7 @@ analyze_boundary = 'N'  # only accepts 'N' or 'Y'
 # display mode
 display_circ = 'Y'  # only accepts 'N' or 'Y'
 display_ecce = 'N'  # only accepts 'N' or 'Y'
+display_int = 'Y'  # only accepts 'N' or 'Y'
 
 # --------------------------
 # LOAD DATA
@@ -87,23 +88,22 @@ sg_pd = sg_analysis(pix, sg, 0)  # SG dataFrame based on multi-FOV stitched imag
 # --------------------------
 print("### Generating output images: Calculate group labeled circ/ecce image ...")
 if display_circ == 'Y':
-    # colormap: circularity
     cmap1 = 'YlOrRd'
-    cmap1_napari = dis.num_color_colormap(cmap1, 100)[0]
-    cmap1_plt = dis.num_color_colormap(cmap1, 100)[1]
-    # circ image
-    num_interval = 10  # do not change
-    range_lst1 = np.arange(0, 1 + 1 / num_interval, 1 / num_interval)
-    sg_circ = obj.group_label_circularity(sg, range_lst1)  # circularity re-binned based on range_lst1
+    cmap1_napari = dis.num_color_colormap(cmap1, 255)[0]
+    cmap1_plt = dis.num_color_colormap(cmap1, 255)[1]
+    sg_circ = obj.obj_display_in_circularity(sg)
 
 if display_ecce == 'Y':
-    # colormap: eccentricity
     cmap2 = 'Blues'
-    cmap2_napari = dis.num_color_colormap(cmap2, 100)[0]
-    cmap2_plt = dis.num_color_colormap(cmap2, 100)[1]
-    # ecce image
-    range_lst2 = [0, 0.2, 0.4, 0.5, 0.6, 0.7, 0.8, 0.85, 0.9, 0.95, 1.0]
-    sg_ecce = obj.group_label_eccentricity(sg, range_lst2)  # eccentricity re-binned based on range_lst2
+    cmap2_napari = dis.num_color_colormap(cmap2, 255)[0]
+    cmap2_plt = dis.num_color_colormap(cmap2, 255)[1]
+    sg_ecce = obj.obj_display_in_eccentricity(sg)
+
+if display_int == 'Y':
+    cmap3 = 'viridis'
+    cmap3_napari = dis.num_color_colormap(cmap3, 255)[0]
+    cmap3_plt = dis.num_color_colormap(cmap3, 255)[1]
+    sg_int = obj.obj_display_in_intensity(sg, pix, [6, 10])
 
 # --------------------------
 # OUTPUT DIR/NAMES
@@ -149,6 +149,13 @@ if display_ecce == 'Y':
     ax = plt.colorbar()
     plt.savefig('%s/eccentricity_%s.pdf' % (storage_path, sample_name))
 
+# intensity
+if display_int == 'Y':
+    fig, ax = plt.subplots(figsize=(8 * num_grid, 8 * num_grid))
+    ax = plt.imshow(sg_int, cmap=cmap3_plt)
+    ax = plt.colorbar()
+    plt.savefig('%s/intensity_%s.pdf' % (storage_path, sample_name))
+
 # --------------------------
 # OUTPUT DISPLAY
 # --------------------------
@@ -175,3 +182,7 @@ with napari.gui_qt():
     # eccentricity
     if display_ecce == 'Y':
         viewer.add_image(sg_ecce, name='ecce', colormap=('cmap2', cmap2_napari))
+
+    # intensity
+    if display_int == 'Y':
+        viewer.add_image(sg_int, name='int', colormap=('cmap3', cmap3_napari))
