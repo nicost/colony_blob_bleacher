@@ -55,32 +55,35 @@ sg_pd = sg_analysis(pix, sg, 0)
 # --------------------------
 # OUTPUT IMAGES
 # --------------------------
-print("### Generating output images: Calculate group labeled circ/ecce image ...")
-# colormap: circularity
-cmap1 = 'YlOrRd'
-cmap1_napari = dis.num_color_colormap(cmap1, 100)[0]
-cmap1_plt = dis.num_color_colormap(cmap1, 100)[1]
+print("### Generating output images: Calculate group labeled circ/ecce/int image ...")
 # circ image
-num_interval = 10  # do not change
-range_lst1 = np.arange(0, 1 + 1 / num_interval, 1 / num_interval)
-sg_circ = obj.group_label_circularity(sg, range_lst1)
+cmap1 = 'YlOrRd'
+cmap1_napari = dis.num_color_colormap(cmap1, 255)[0]
+cmap1_plt = dis.num_color_colormap(cmap1, 255)[1]
+sg_circ = obj.obj_display_in_circularity(sg)
 
-# colormap: eccentricity
-cmap2 = 'Blues'
-cmap2_napari = dis.num_color_colormap(cmap2, 100)[0]
-cmap2_plt = dis.num_color_colormap(cmap2, 100)[1]
 # ecce image
-range_lst2 = [0, 0.2, 0.4, 0.5, 0.6, 0.7, 0.8, 0.85, 0.9, 0.95, 1.0]
-sg_ecce = obj.group_label_eccentricity(sg, range_lst2)
+cmap2 = 'Blues'
+cmap2_napari = dis.num_color_colormap(cmap2, 255)[0]
+cmap2_plt = dis.num_color_colormap(cmap2, 255)[1]
+sg_ecce = obj.obj_display_in_eccentricity(sg)
+
+# int image
+cmap3 = 'viridis'
+cmap3_napari = dis.num_color_colormap(cmap3, 255)[0]
+cmap3_plt = dis.num_color_colormap(cmap3, 255)[1]
+sg_int = obj.obj_display_in_intensity(sg, pix, [6, 10])
 
 # --------------------------
 # OUTPUT DIR/NAMES
 # --------------------------
+"""
 # get sample name
 sample_name = data_path.split('"')[0].split('/')[-1]
 storage_path = '%s/%s_pos%s/' % (save_path, sample_name, pos)
 if not os.path.exists(storage_path):
     os.makedirs(storage_path)
+"""
 
 # --------------------------
 # OUTPUT FILE
@@ -108,6 +111,11 @@ fig, ax = plt.subplots(figsize=(8, 8))
 ax = plt.imshow(sg_ecce, cmap=cmap2_plt)
 ax = plt.colorbar()
 plt.savefig('%s/eccentricity_%s_pos%s.pdf' % (storage_path, sample_name, pos))
+
+fig, ax = plt.subplots(figsize=(8, 8))
+ax = plt.imshow(sg_int, cmap=cmap3_plt)
+ax = plt.colorbar()
+plt.savefig('%s/intensity_%s_pos%s.pdf' % (storage_path, sample_name, pos))
 """
 
 # --------------------------
@@ -127,6 +135,7 @@ with napari.gui_qt():
 
     viewer.add_image(sg_circ, name='circ', colormap=('cmap1', cmap1_napari))
     viewer.add_image(sg_ecce, name='ecce', colormap=('cmap2', cmap2_napari))
+    viewer.add_image(sg_int, name='int',  colormap=('cmap3', cmap3_napari))
 
     """
     # color coded based on sequential sorting
