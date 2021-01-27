@@ -5,7 +5,7 @@ from skimage.morphology import extrema, binary_dilation, binary_erosion
 from skimage.filters import threshold_otsu, threshold_yen, threshold_local
 
 import shared.objects as obj
-from shared.objects import remove_small, remove_large
+from shared.objects import remove_large
 
 
 def segment_watershed(pixels: np.array, extreme_val: int, bg_val: int):
@@ -28,13 +28,12 @@ def find_blobs(pixels: np.array, binary_global: np.array, extreme_val: int, bg_v
     """
     Find "blobs" in image.  Current strategy: use a segmentation.watershed on the input pixes,
     using extreme_val to find local maxima, adn bg_val to find background.  Combine the
-    watershed with a globally thresholded image (using logical OR) binary_global.
+    watershed with a globally threshold image (using logical OR) binary_global.
 
     :param pixels: input image
     :param binary_global: binary threshold image gain from global thresholding
     :param extreme_val: used to find local maxima
     :param bg_val: used to define background for watershed
-    :param min_size: minimum size of the blobs
     :param max_size: maximum size of the blobs
     :return: segmented image of same size as input
     """
@@ -62,9 +61,12 @@ def get_binary_global(pixels: np.array, threshold_method='na', min_size=5, max_s
     :param max_size: maximum size of blobs
     :return: out: 0-and-1 np.array, binary global thresholding image
     """
-    if threshold_method == 'na':
-        out = np.zeros_like(pixels)
-    elif (threshold_method == 'otsu')|(threshold_method == 'yen'):
+
+    check_lst = ['na', 'otsu', 'yen', 'local-nucleoli', 'local-sg']
+    if threshold_method not in check_lst:
+        raise ValueError("global thresholding method only accepts %s. Got %s" % (check_lst, threshold_method))
+
+    elif (threshold_method == 'otsu') | (threshold_method == 'yen'):
         if threshold_method == 'otsu':
             global_threshold_val = threshold_otsu(pixels)
             # Threshold value to create global threshold.  try: threshold_otsu(pixels)
@@ -75,6 +77,7 @@ def get_binary_global(pixels: np.array, threshold_method='na', min_size=5, max_s
         # one round of erosion/dilation to clear out boundary
         out = binary_erosion(out)
         out = binary_dilation(out)
+
     elif threshold_method == 'local-nucleoli':
         # use otsu thresholding to determine background region
         global_threshold_val = threshold_otsu(pixels)
@@ -90,6 +93,7 @@ def get_binary_global(pixels: np.array, threshold_method='na', min_size=5, max_s
         out = binary_erosion(out)
         out = obj.remove_small(out, min_size)
         out = binary_dilation(out)
+
     elif threshold_method == 'local-sg':
         # use otsu thresholding to determine background region
         global_threshold_val = threshold_otsu(pixels)
@@ -101,6 +105,10 @@ def get_binary_global(pixels: np.array, threshold_method='na', min_size=5, max_s
         out = obj.remove_large(out, max_size)
         # combine with otsu thresholding to determine background region
         out[bg == 0] = 0
+
+    else:
+        out = np.zeros_like(pixels)
+
     return out
 
 
@@ -128,14 +136,12 @@ def select(in_list: list, key, in_min: int, in_max: int):
 
 
 # canny filter and fill
-#hist, hist_centers = histogram(pixels)
-#edges = canny(pixels/(hist_centers.argmax() * 0.4), sigma=3)
-#filled = ndi.binary_fill_holes(edges)
+# hist, hist_centers = histogram(pixels)
+# edges = canny(pixels/(hist_centers.argmax() * 0.4), sigma=3)
+# filled = ndi.binary_fill_holes(edges)
 
-#seg_500_200 = find_ps_organelles(pixels, 500, 200)
-#binary_global = pixels > threshold_otsu(pixels)
-##merge = np.zeros_like(pixels)
-#merge[seg_500_200 == 2] = 1
-#merge |= binary_global
-
-
+# seg_500_200 = find_ps_organelles(pixels, 500, 200)
+# binary_global = pixels > threshold_otsu(pixels)
+# merge = np.zeros_like(pixels)
+# merge[seg_500_200 == 2] = 1
+# merge |= binary_global
