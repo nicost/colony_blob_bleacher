@@ -72,7 +72,7 @@ pix = np.reshape(temp.get_raw_pixels(), newshape=[temp.get_height(), temp.get_wi
 nucleoli = find_organelle(pix, thresholding, min_size=min_size, max_size=max_size)
 print("Found %d nucleoli." % obj.object_count(nucleoli))
 # nucleoli pd dataset
-nucleoli_pd = nucleoli_analysis(nucleoli)
+nucleoli_pd = nucleoli_analysis(pix, nucleoli, data_p)
 
 # ----------------------------------
 # BLEACH SPOTS DETECTION
@@ -119,11 +119,16 @@ if not os.path.exists(storage_path):
 pointer_pd.to_csv('%s/data_full.txt' % storage_path, index=False, sep='\t')
 # dataset of control spots
 ctrl_pd.to_csv('%s/data_ctrl.txt' % storage_path, index=False, sep='\t')
+# dataset of nucleoli
+nucleoli_pd.to_csv('%s/data_nucleoli.txt' % storage_path, index=False, sep='\t')
+
 # simplified dataset of bleach spots after FRAP curve quality control
 pointer_out = pd.DataFrame({'bleach_spots': pointer_ft_pd['bleach_spots'],
                             'x': pointer_ft_pd['x'],
                             'y': pointer_ft_pd['y'],
+                            'nucleoli': pointer_ft_pd['nucleoli'],
                             'nucleoli_size': pointer_ft_pd['nucleoli_size'],
+                            'nucleoli_int': pointer_ft_pd['nucleoli_int'],
                             'bleach_frame': pointer_ft_pd['bleach_frame'],
                             'pre_bleach_int': pointer_ft_pd['pre_bleach_int'],
                             'start_int': pointer_ft_pd['frap_start_int'],
