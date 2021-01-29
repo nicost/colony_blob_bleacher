@@ -90,3 +90,19 @@ def get_grid_pos(pos, num_grid):
     else:
         col = num_grid-1-(pos-row*num_grid)
     return row, col
+
+
+def find_closest(aim_x, aim_y, x_list, y_list):
+    dis = 10000000000
+    x_closest = 0
+    y_closest = 0
+    for i in range(len(x_list)):
+        x_temp = x_list[i]
+        y_temp = y_list[i]
+        dis_temp = (x_temp - aim_x) ** 2 + (y_temp - aim_y) ** 2
+        if dis_temp < dis:
+            dis = dis_temp
+            x_closest = x_temp
+            y_closest = y_temp
+
+    return x_closest, y_closest
