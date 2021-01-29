@@ -122,7 +122,7 @@ def get_frap(pointer_pd, store, cb, bleach_spots, nucleoli_pd, log_pd, num_dilat
         pointer_pd = dat.add_object_measurements(pointer_pd, 'pb_factor', 'bleach_spots', [pb_factor] * len(pointer_pd))
         pointer_pd = dat.add_object_measurements(pointer_pd, 'mean_int', 'bleach_spots', bleach_spots_int_dual_cor)
 
-    return pointer_pd
+    return pointer_pd, ctrl_pd
 
 
 def get_bleach_frame(log_pd, store, cb):
@@ -332,3 +332,24 @@ def get_bleach_spots_coordinates(log_pd, store, cb, mode):
         log_pd.loc[log_pd.y == 0, 'y'] = log_pd[log_pd['y'] == 0]['aim_y']
 
     return log_pd
+
+
+def frap_filter(pointer_pd):
+    # filter frap curves
+    # 1) number of pre_bleach frame < 5
+    # 2) does not find optional fit (single exponential)
+    # 3) mobile fraction < 0
+    # 3) mobile fraction > 1.5
+    # 4) maximum normalized intensity > 2
+
+    frap_flt = []
+    for i in range(len(pointer_pd)):
+        if (pointer_pd['bleach_frame'][i] < 5) | (np.isnan(pointer_pd['single_exp_r2'][i])) \
+                | (pointer_pd['single_exp_a'][i] < 0) | (pointer_pd['single_exp_a'][i] > 1.5) \
+                | (np.max(pointer_pd['int_curve_post_nor'][i]) > 2):
+            frap_flt.append(0)
+        else:
+            frap_flt.append(1)
+    pointer_pd['frap_filter'] = frap_flt
+
+    return pointer_pd
