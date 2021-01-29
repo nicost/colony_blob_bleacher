@@ -72,7 +72,7 @@ def sg_analysis(pixels: np.array, sg, pos=0):
 
     :param pixels: np.array, grey scale image
     :param sg: np.array, 0-and-1, SG mask
-    :param pos: position of pixels in uManager dataset
+    :param pos: position of pixels (for FOV distinction and multi-image stitch)
     :return: sg_pd: pd.DataFrame describes SG features including position in uManager dataset, SG number,
         x, y coordinate, size, mean intensity, circularity and eccentricity
     """
@@ -97,24 +97,30 @@ def sg_analysis(pixels: np.array, sg, pos=0):
     return sg_pd
 
 
-def nucleoli_analysis(nucleoli):
+def nucleoli_analysis(pixels: np.array, nucleoli, pos=0):
     """
     Analyze nucleoli properties and return a pd.DataFrame table
 
-    :param nucleoli: np.array, 0-and-1, nucleoli mask
+    :param: pixels: np.array, grey scale image
+    :param: nucleoli: np.array, 0-and-1, nucleoli mask
+    :param: pos: position of pixels (for FOV distinction and multi-image stitch)
     :return: nucleoli_pd: pd.DataFrame describes nucleoli features including nucleoli number, size, x, y
         coordinates of the centroid
     """
     # get the size and centroid of each nucleoli
     nucleoli_label = label(nucleoli, connectivity=1)
     nucleoli_prop = regionprops(nucleoli_label)
+    nucleoli_prop_int = regionprops(nucleoli_label, pixels)
     nucleoli_areas = [p.area for p in nucleoli_prop]
     nucleoli_centroid_x = [p.centroid[0] for p in nucleoli_prop]
     nucleoli_centroid_y = [p.centroid[1] for p in nucleoli_prop]
     nucleoli_label = [p.label for p in nucleoli_prop]
+    nucleoli_mean_int = [p.mean_intensity for p in nucleoli_prop_int]
+    nucleoli_circ = [(4 * math.pi * p.area) / (p.perimeter ** 2) for p in nucleoli_prop]
 
     # nucleoli pd dataset
-    nucleoli_pd = pd.DataFrame({'nucleoli': nucleoli_label, 'size': nucleoli_areas,
-                                'centroid_x': nucleoli_centroid_x, 'centroid_y': nucleoli_centroid_y})
+    nucleoli_pd = pd.DataFrame({'pos': [pos]*len(nucleoli_prop), 'nucleoli': nucleoli_label, 'size': nucleoli_areas,
+                                'centroid_x': nucleoli_centroid_x, 'centroid_y': nucleoli_centroid_y,
+                                'mean_int': nucleoli_mean_int, 'circ': nucleoli_circ})
 
     return nucleoli_pd
