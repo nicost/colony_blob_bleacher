@@ -108,7 +108,8 @@ def plot_raw_intensity(pointer_pd, ctrl_pd, storage_path):
     Grey: raw intensity measured from control spots
     Black: raw intensity of background
 
-    :param pointer_pd: pd.DataFrame(), requires columns 'frap_filter', 'raw_int', 'bg_int'
+    :param pointer_pd: pd.DataFrame(), requires columns 'frap_filter', 'raw_int', 'bg_int',
+        'bg_linear_fit', 'bg_linear_a'
     :param ctrl_pd: pd.DataFrame(), requires columns 'raw_int'
     :param storage_path: directory to save image
     :return:
@@ -118,7 +119,8 @@ def plot_raw_intensity(pointer_pd, ctrl_pd, storage_path):
     j = 0
     plt.subplots(figsize=(6, 4))
     plt.plot(pointer_pd['bg_int'][0], color=(0, 0, 0), alpha=0.7, label='bg')
-    plt.plot(pointer_pd['bg_linear_fit'][0], '--', color=(0, 0, 0), alpha=0.7)
+    if ~np.isnan(pointer_pd['bg_linear_a'][0]):
+        plt.plot(pointer_pd['bg_linear_fit'][0], '--', color=(0, 0, 0), alpha=0.7)
     for i in range(len(ctrl_pd)):
         if j == 0:
             plt.plot(ctrl_pd['raw_int'][i], color=(0.7, 0.7, 0.7), alpha=0.5, label='ctrl')
@@ -146,14 +148,18 @@ def plot_raw_intensity(pointer_pd, ctrl_pd, storage_path):
 
 def plot_pb_factor(pointer_pd, storage_path):
     """
-    Plot and save photobleaching factor curve calculated from control spots (for FRAP analysis)
+    Plot and save photobleaching factor curve and single exponential decay fitting curve calculated
+    from control spots (for FRAP analysis)
 
-    :param pointer_pd: pd.DataFrame(), requires columns 'pb_factor'
+    :param pointer_pd: pd.DataFrame(), requires columns 'pb_factor', 'pb_single_exp_decay_fit',
+        'pb_single_exp_decay_a'
     :param storage_path: directory to save image
     :return:
     """
     plt.subplots(figsize=(6, 4))
     plt.plot(pointer_pd['pb_factor'][0], color=(0.8, 0.8, 0.8))
+    if ~np.isnan(pointer_pd['pb_single_exp_decay_a'][0]):
+        plt.plot(pointer_pd['pb_single_exp_decay_fit'][0], '--', color=(0.8, 0.8, 0.8))
     plt.xlabel('time (frame)')
     plt.ylabel('photobleaching factor')
     plt.savefig('%s/pb_factor.pdf' % storage_path)
