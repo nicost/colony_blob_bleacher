@@ -20,8 +20,7 @@ def get_bleach_spots(log_pd, nucleoli, nucleoli_pd, num_dilation=3):
     :param num_dilation: number of dilation from the coordinate; determines analysis size of the
         analysis spots; default = 3
     :return: bleach_spots_ft: np.array, 0-and-1, bleach spots mask
-             pointer_ft_pd: pd.DataFrame of pointer information after filter, information includes
-            'time', 'aim_x', 'aim_y', 'x', 'y', 'nucleoli', 'bleach_spots', 'nucleoli_size'
+             pointer_ft_pd: pd.DataFrame of pointer information after filter
     """
 
     # link pointer with corresponding nucleoli
@@ -52,10 +51,22 @@ def get_bleach_spots(log_pd, nucleoli, nucleoli_pd, num_dilation=3):
     pointer_ft_pd['bleach_spots'] = obj.points_in_objects(bleach_spots_ft, pointer_ft_pd['x'], pointer_ft_pd['y'])
 
     # measure pointer corresponding nucleoli sizes
-    pointer_nucleoli_sizes = []
+    pointer_nucleoli_x = []
+    pointer_nucleoli_y = []
+    pointer_nucleoli_size = []
+    pointer_nucleoli_int = []
+    pointer_nucleoli_circ = []
     for i in range(len(pointer_ft_pd)):
-        pointer_nucleoli_sizes.append(nucleoli_pd['size'][pointer_ft_pd['nucleoli'][i]])
-    pointer_ft_pd['nucleoli_size'] = pointer_nucleoli_sizes
+        pointer_nucleoli_x.append(nucleoli_pd['centroid_x'][pointer_ft_pd['nucleoli'][i]])
+        pointer_nucleoli_y.append(nucleoli_pd['centroid_y'][pointer_ft_pd['nucleoli'][i]])
+        pointer_nucleoli_size.append(nucleoli_pd['size'][pointer_ft_pd['nucleoli'][i]])
+        pointer_nucleoli_int.append(nucleoli_pd['mean_int'][pointer_ft_pd['nucleoli'][i]])
+        pointer_nucleoli_circ.append(nucleoli_pd['circ'][pointer_ft_pd['nucleoli'][i]])
+
+    pointer_ft_pd = dat.add_columns(pointer_ft_pd, ['nucleoli_x', 'nucleoli_y', 'nucleoli_size',
+                                                    'nucleoli_int', 'nucleoli_circ'],
+                                    [pointer_nucleoli_x, pointer_nucleoli_y, pointer_nucleoli_size,
+                                     pointer_nucleoli_int, pointer_nucleoli_circ])
 
     return bleach_spots_ft, pointer_ft_pd
 
@@ -92,8 +103,8 @@ def get_frap(pointer_pd, store, cb, bleach_spots, nucleoli_pd, log_pd, num_dilat
 
     # background intensity measurement
     bg_int_tseries = ana.get_bg_int(pixels_tseries)
-    pointer_pd = dat.add_object_measurements(pointer_pd, 'bg_int', 'bleach_spots',
-                                             [bg_int_tseries] * len(pointer_pd))
+    pointer_pd['bg_int'] = [bg_int_tseries] * len(pointer_pd)
+
     # background intensity fitting
     pointer_pd = bg_fitting_linear(pointer_pd)
 
