@@ -30,3 +30,12 @@ def r_square(y, y_fit):
     ss_tot = np.sum([(a-np.mean(y))**2 for a in y])
     r2 = 1 - (ss_res/ss_tot)
     return r2
+
+
+# linear regression
+def linear(x, a, b):
+    """
+        Linear regression function
+    """
+
+    return a * x + b
