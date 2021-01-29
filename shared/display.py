@@ -117,7 +117,8 @@ def plot_raw_intensity(pointer_pd, ctrl_pd, storage_path):
     n = 0
     j = 0
     plt.subplots(figsize=(6, 4))
-    plt.plot(pointer_pd['bg_int'][0], color=(0, 0, 0), label='bg')
+    plt.plot(pointer_pd['bg_int'][0], color=(0, 0, 0), alpha=0.7, label='bg')
+    plt.plot(pointer_pd['bg_linear_fit'][0], '--', color=(0, 0, 0), alpha=0.7)
     for i in range(len(ctrl_pd)):
         if j == 0:
             plt.plot(ctrl_pd['raw_int'][i], color=(0.7, 0.7, 0.7), alpha=0.5, label='ctrl')
