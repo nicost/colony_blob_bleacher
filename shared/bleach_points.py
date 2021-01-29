@@ -88,14 +88,14 @@ def get_frap(pointer_pd, store, cb, bleach_spots, nucleoli_pd, log_pd, num_dilat
             bleach_spots_int_tseries[i].append(bleach_spots_pix[i].mean_intensity)
         for i in range(len(ctrl_spots_pix)):
             ctrl_spots_int_tseries[i].append(ctrl_spots_pix[i].mean_intensity)
-    num_ctrl_spots = obj.object_count(ctrl_spots)
+    pointer_pd = dat.add_object_measurements(pointer_pd, 'raw_int', 'bleach_spots', bleach_spots_int_tseries)
 
     # background intensity measurement
     bg_int_tseries = ana.get_bg_int(pixels_tseries)
     pointer_pd = dat.add_object_measurements(pointer_pd, 'bg_int', 'bleach_spots',
                                              [bg_int_tseries] * len(pointer_pd))
     # background intensity fitting
-    pointer_pd = bg_fitting(pointer_pd)
+    pointer_pd = bg_fitting_linear(pointer_pd)
 
     # background correction
     if np.isnan(pointer_pd['bg_linear_a'][0]):
@@ -104,29 +104,29 @@ def get_frap(pointer_pd, store, cb, bleach_spots, nucleoli_pd, log_pd, num_dilat
         bg = pointer_pd['bg_linear_fit'][0]
     bleach_spots_int_cor = ana.bg_correction(bleach_spots_int_tseries, bg)
     ctrl_spots_int_cor = ana.bg_correction(ctrl_spots_int_tseries, bg)
+    pointer_pd = dat.add_object_measurements(pointer_pd, 'bg_cor_int', 'bleach_spots', bleach_spots_int_cor)
+    num_ctrl_spots = obj.object_count(ctrl_spots)
     ctrl_pd = pd.DataFrame({'ctrl_spots': np.arange(0, num_ctrl_spots, 1), 'raw_int': ctrl_spots_int_tseries,
                             'bg_cor_int': ctrl_spots_int_cor})
-
-    pointer_pd = dat.add_object_measurements(pointer_pd, 'raw_int', 'bleach_spots', bleach_spots_int_tseries)
-    pointer_pd = dat.add_object_measurements(pointer_pd, 'bg_cor_int', 'bleach_spots', bleach_spots_int_cor)
+    pointer_pd = dat.add_object_measurements(pointer_pd, 'num_ctrl_spots', 'bleach_spots',
+                                             [num_ctrl_spots] * len(pointer_pd))
 
     # photobleaching correction
-    if num_ctrl_spots < 5:
-        print("Required at least 5 ctrl areas for photobleaching correction, only receive %d" % num_ctrl_spots)
-        pointer_pd = dat.add_object_measurements(pointer_pd, 'num_ctrl_spots', 'bleach_spots',
-                                                 [num_ctrl_spots] * len(pointer_pd))
-        pointer_pd = dat.add_object_measurements(pointer_pd, 'pb_factor', 'bleach_spots', [np.nan] * len(pointer_pd))
-        pointer_pd = dat.add_object_measurements(pointer_pd, 'mean_int', 'bleach_spots', [np.nan] * len(pointer_pd))
-    else:
+    if num_ctrl_spots != 0:
         # calculate photobleaching factor
         pb_factor = ana.get_pb_factor(ctrl_spots_int_cor)
-        print("%d ctrl points are used to correct photobleaching." % obj.object_count(ctrl_spots))
-        # photobleaching correction
-        bleach_spots_int_dual_cor = ana.pb_correction(bleach_spots_int_cor, pb_factor)
-        # add corrected intensities into pointer_ft
-        pointer_pd = dat.add_object_measurements(pointer_pd, 'num_ctrl_spots', 'bleach_spots',
-                                                 [num_ctrl_spots] * len(pointer_pd))
         pointer_pd = dat.add_object_measurements(pointer_pd, 'pb_factor', 'bleach_spots', [pb_factor] * len(pointer_pd))
+        print("%d ctrl points are used to correct photobleaching." % obj.object_count(ctrl_spots))
+        # pb_factor fitting with single exponential decay
+        pointer_pd = pb_factor_fitting_single_exp(pointer_pd)
+
+        # photobleaching correction
+        if np.isnan(pointer_pd['pb_single_exp_decay_a'][0]):
+            pb = pb_factor
+        else:
+            pb = pointer_pd['pb_single_exp_decay_fit'][0]
+        bleach_spots_int_dual_cor = ana.pb_correction(bleach_spots_int_cor, pb)
+        # add corrected intensities into pointer_ft
         pointer_pd = dat.add_object_measurements(pointer_pd, 'mean_int', 'bleach_spots', bleach_spots_int_dual_cor)
 
     return pointer_pd, ctrl_pd
@@ -236,7 +236,7 @@ def frap_analysis(pointer_pd, store, cb):
     return pointer_pd
 
 
-def bg_fitting(pointer_pd):
+def bg_fitting_linear(pointer_pd):
 
     bg = pointer_pd['bg_int'][0]
     try:
@@ -257,6 +257,27 @@ def bg_fitting(pointer_pd):
 
     return pointer_pd
 
+
+def pb_factor_fitting_single_exp(pointer_pd):
+    pb = pointer_pd['pb_factor'][0]
+    try:
+        popt, _ = curve_fit(mat.single_exp_decay, np.arange(0, len(pb), 1), pb)
+        a, b = popt
+    except RuntimeError:
+        a = np.nan
+        b = np.nan
+
+    pb_fit = []
+    for j in range(len(pb)):
+        pb_fit.append(mat.single_exp_decay(j, a, b))
+    r2 = mat.r_square(pb, pb_fit)
+
+    pointer_pd = dat.add_columns(pointer_pd, ['pb_single_exp_decay_fit', 'pb_single_exp_decay_r2',
+                                              'pb_single_exp_decay_a', 'pb_single_exp_decay_b'],
+                                 [[pb_fit] * len(pointer_pd), [r2] * len(pointer_pd),
+                                  [a] * len(pointer_pd), [b] * len(pointer_pd)])
+
+    return pointer_pd
 
 def frap_fitting_single_exp(pointer_pd):
 
