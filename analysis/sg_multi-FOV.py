@@ -50,14 +50,14 @@ DISPLAYS
     analyze_boundary: if SG fall at the boundaries of two neighbour images after image stitch are 
         subject to analysis or not; only accepts 'N' and 'Y'
     export_mode: enables export or not; only accepts 'N' and 'Y'
-    export_pd_pre_stitch: exports SG measurements (.txt) based on uManager position/SG number/x,y 
-        coordinates on original FOV or not; only accepts 'N' or 'Y'; 'Y' is functional only while 
-        export_mode == 'Y'
-    export_pd_post_stitch: exports SG measurements (.txt) based on uManager position/SG number/x,y
-        coordinates on stitched image or not; only accepts 'N' or 'Y'; 'Y' is functional only while 
-        export_mode == 'Y'
-    export_img: exports stitched images (.pdf) or not; only accepts 'N' or 'Y'; 'Y' is functional 
-        only while export_mode == 'Y'
+        export_pd_pre_stitch: exports SG measurements (.txt) based on uManager position/SG number/
+            x,y coordinates on original FOV or not; only accepts 'N' or 'Y'; 'Y' is functional only 
+            while export_mode == 'Y'
+        export_pd_post_stitch: exports SG measurements (.txt) based on uManager position/SG number/
+            x,y coordinates on stitched image or not; only accepts 'N' or 'Y'; 'Y' is functional only 
+            while export_mode == 'Y'
+        export_img: exports stitched images (.pdf) or not; only accepts 'N' or 'Y'; 'Y' is functional 
+            only while export_mode == 'Y'
     display_mode: displays stitched images in napari or not; only accepts 'N' or 'Y'
     
     # color-coded (cc) images calculation (added due to time concern)
@@ -72,7 +72,7 @@ DISPLAYS
 # PARAMETERS ALLOW CHANGE
 # --------------------------
 # paths
-data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/SG_scoring/CX"
+data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/SG_scoring/WT"
 save_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/SG_scoring/dataAnalysis/"
 
 # values for analysis
@@ -87,13 +87,13 @@ max_size = 350  # non-negative int
 analyze_boundary = 'N'  # only accepts 'N' or 'Y'
 export_mode = 'Y'  # only accepts 'N' or 'Y'
 export_pd_pre_stitch = 'Y'  # only accepts 'N' or 'Y'
-export_pd_post_stitch = 'Y'  # only accepts 'N' or 'Y'
+export_pd_post_stitch = 'N'  # only accepts 'N' or 'Y'
 export_img = 'Y'  # only accepts 'N' or 'Y'
 display_mode = 'Y'  # only accepts 'N' or 'Y'
 
 # color-coded (cc) images calculation (added due to time concern)
 cc_circ = 'Y'  # only accepts 'N' or 'Y'
-cc_ecce = 'Y'  # only accepts 'N' or 'Y'
+cc_ecce = 'N'  # only accepts 'N' or 'Y'
 cc_int = 'Y'  # only accepts 'N' or 'Y'
 
 """
@@ -153,9 +153,7 @@ elif analyze_boundary == 'N':
 else:
     sg = find_organelle(pix, thresholding, min_size=min_size, max_size=max_size)
 
-sg_pd = pd.DataFrame()  # SG dataFrame based on multi-FOV stitched image
-if export_pd_post_stitch == 'Y':
-    sg_pd = sg_analysis(pix, sg, 0)
+sg_pd = sg_analysis(pix, sg, 0)  # SG dataFrame based on multi-FOV stitched image
 
 # --------------------------
 # COLOR CODED IMAGES
