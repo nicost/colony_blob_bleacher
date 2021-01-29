@@ -90,17 +90,24 @@ def get_frap(pointer_pd, store, cb, bleach_spots, nucleoli_pd, log_pd, num_dilat
             ctrl_spots_int_tseries[i].append(ctrl_spots_pix[i].mean_intensity)
     num_ctrl_spots = obj.object_count(ctrl_spots)
 
-    # background correction
+    # background intensity measurement
     bg_int_tseries = ana.get_bg_int(pixels_tseries)
-    bleach_spots_int_cor = ana.bg_correction(bleach_spots_int_tseries, bg_int_tseries)
-    ctrl_spots_int_cor = ana.bg_correction(ctrl_spots_int_tseries, bg_int_tseries)
+    pointer_pd = dat.add_object_measurements(pointer_pd, 'bg_int', 'bleach_spots',
+                                             [bg_int_tseries] * len(pointer_pd))
+    # background intensity fitting
+    pointer_pd = bg_fitting(pointer_pd)
 
+    # background correction
+    if np.isnan(pointer_pd['bg_linear_a'][0]):
+        bg = bg_int_tseries
+    else:
+        bg = pointer_pd['bg_linear_fit'][0]
+    bleach_spots_int_cor = ana.bg_correction(bleach_spots_int_tseries, bg)
+    ctrl_spots_int_cor = ana.bg_correction(ctrl_spots_int_tseries, bg)
     ctrl_pd = pd.DataFrame({'ctrl_spots': np.arange(0, num_ctrl_spots, 1), 'raw_int': ctrl_spots_int_tseries,
                             'bg_cor_int': ctrl_spots_int_cor})
 
     pointer_pd = dat.add_object_measurements(pointer_pd, 'raw_int', 'bleach_spots', bleach_spots_int_tseries)
-    pointer_pd = dat.add_object_measurements(pointer_pd, 'bg_int', 'bleach_spots',
-                                             [bg_int_tseries] * len(pointer_pd))
     pointer_pd = dat.add_object_measurements(pointer_pd, 'bg_cor_int', 'bleach_spots', bleach_spots_int_cor)
 
     # photobleaching correction
@@ -225,6 +232,28 @@ def frap_analysis(pointer_pd, store, cb):
                                   pre_bleach_int, frap_start_int, plateau_int, plateau_int_nor,
                                   immobile_fraction, half_int, half_int_nor, half_frame,
                                   t_half, slope])
+
+    return pointer_pd
+
+
+def bg_fitting(pointer_pd):
+
+    bg = pointer_pd['bg_int'][0]
+    try:
+        popt, _ = curve_fit(mat.linear, np.arange(0, len(bg), 1), bg)
+        a, b = popt
+    except RuntimeError:
+        a = np.nan
+        b = np.nan
+
+    bg_fit = []
+    for j in range(len(bg)):
+        bg_fit.append(mat.linear(j, a, b))
+    r2 = mat.r_square(bg, bg_fit)
+
+    pointer_pd = dat.add_columns(pointer_pd, ['bg_linear_fit', 'bg_linear_r2', 'bg_linear_a', 'bg_linear_b'],
+                                 [[bg_fit] * len(pointer_pd), [r2] * len(pointer_pd),
+                                  [a] * len(pointer_pd), [b] * len(pointer_pd)])
 
     return pointer_pd
 
