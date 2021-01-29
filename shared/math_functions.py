@@ -39,3 +39,15 @@ def linear(x, a, b):
     """
 
     return a * x + b
+
+
+# single  exponential decay
+def single_exp_decay(x, a, b):
+    """
+    single exponential decay curve for photobleaching fitting
+
+    :param x: input time frames
+    :param a:
+    :param b:
+    """
+    return 1 - a * (1 - np.exp(-b * x))
