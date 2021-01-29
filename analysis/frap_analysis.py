@@ -15,6 +15,7 @@ import shared.analysis as ana
 import shared.display as dis
 import shared.objects as obj
 import shared.bleach_points as ble
+import os
 
 # --------------------------
 # PARAMETERS allow change
@@ -22,7 +23,9 @@ import shared.bleach_points as ble
 # paths
 # data_path = "C:\\Users\\NicoLocal\\Images\\Jess\\20201116-Nucleoli-bleaching-4x\\PythonAcq1\\AutoBleach_15"
 data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/" \
-            "20201216_CBB_nucleoliBleachingTest_drugTreatment/Ctrl-2DG-CCCP-36pos_partial/exp_111/"
+            "20201216_CBB_nucleoliBleachingTest_drugTreatment/Ctrl-2DG-CCCP-36pos_partial/exp_110/"
+save_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/" \
+            "20201216_CBB_nucleoliBleachingTest_drugTreatment/Ctrl-2DG-CCCP-36pos_partial/exp_110/test/"
 
 # values for analysis
 data_z = 0
@@ -107,11 +110,15 @@ print("%d spots passed filters for FRAP curve quality control." % len(pointer_ft
 # --------------------------
 print("### Export data ...")
 
+storage_path = save_path
+if not os.path.exists(storage_path):
+    os.makedirs(storage_path)
+
 # measurements
 # full dataset of all bleach spots
-pointer_pd.to_csv('%s/data_full.txt' % data_path, index=False, sep='\t')
+pointer_pd.to_csv('%s/data_full.txt' % storage_path, index=False, sep='\t')
 # dataset of control spots
-ctrl_pd.to_csv('%s/data_ctrl.txt' % data_path, index=False, sep='\t')
+ctrl_pd.to_csv('%s/data_ctrl.txt' % storage_path, index=False, sep='\t')
 # simplified dataset of bleach spots after FRAP curve quality control
 pointer_out = pd.DataFrame({'bleach_spots': pointer_ft_pd['bleach_spots'],
                             'x': pointer_ft_pd['x'],
@@ -125,10 +132,9 @@ pointer_out = pd.DataFrame({'bleach_spots': pointer_ft_pd['bleach_spots'],
                             'single_exp_r2': pointer_ft_pd['single_exp_r2'],
                             'single_exp_mobile_fraction': pointer_ft_pd['single_exp_mobile_fraction'],
                             'single_exp_t_half': pointer_ft_pd['single_exp_t_half']})
-pointer_out.to_csv('%s/data.txt' % data_path, index=False, sep='\t')
+pointer_out.to_csv('%s/data.txt' % storage_path, index=False, sep='\t')
 
 # images
-storage_path = data_path
 dis.plot_offset_map(pointer_pd, storage_path)  # offset map
 dis.plot_raw_intensity(pointer_pd, ctrl_pd, storage_path)  # raw intensity
 dis.plot_pb_factor(pointer_pd, storage_path)  # photobleaching factor
