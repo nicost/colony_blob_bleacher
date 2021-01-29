@@ -66,7 +66,16 @@ def find_organelle(pixels: np.array, global_thresholding='na', extreme_val=500, 
     return organelle_filtered
 
 
-def sg_analysis(pixels: np.array, sg, pos):
+def sg_analysis(pixels: np.array, sg, pos=0):
+    """
+    Analyze SG properties and return a pd.DataFrame table
+
+    :param pixels: np.array, grey scale image
+    :param sg: np.array, 0-and-1, SG mask
+    :param pos: position of pixels in uManager dataset
+    :return: sg_pd: pd.DataFrame describes SG features including position in uManager dataset, SG number,
+        x, y coordinate, size, mean intensity, circularity and eccentricity
+    """
     label_sg = label(sg, connectivity=1)
     sg_prop = regionprops(label_sg)
     sg_prop_int = regionprops(label_sg, pixels)
@@ -86,3 +95,26 @@ def sg_analysis(pixels: np.array, sg, pos):
                           'int': sg_mean_int, 'circ': sg_circ, 'eccentricity': sg_eccentricity})
 
     return sg_pd
+
+
+def nucleoli_analysis(nucleoli):
+    """
+    Analyze nucleoli properties and return a pd.DataFrame table
+
+    :param nucleoli: np.array, 0-and-1, nucleoli mask
+    :return: nucleoli_pd: pd.DataFrame describes nucleoli features including nucleoli number, size, x, y
+        coordinates of the centroid
+    """
+    # get the size and centroid of each nucleoli
+    nucleoli_label = label(nucleoli, connectivity=1)
+    nucleoli_prop = regionprops(nucleoli_label)
+    nucleoli_areas = [p.area for p in nucleoli_prop]
+    nucleoli_centroid_x = [p.centroid[0] for p in nucleoli_prop]
+    nucleoli_centroid_y = [p.centroid[1] for p in nucleoli_prop]
+    nucleoli_label = [p.label for p in nucleoli_prop]
+
+    # nucleoli pd dataset
+    nucleoli_pd = pd.DataFrame({'nucleoli': nucleoli_label, 'size': nucleoli_areas,
+                                'centroid_x': nucleoli_centroid_x, 'centroid_y': nucleoli_centroid_y})
+
+    return nucleoli_pd
