@@ -7,6 +7,7 @@ from skimage.feature import peak_local_max
 from skimage.filters import rank, threshold_triangle
 from skimage.morphology import disk, opening, dilation, binary_dilation
 from skimage.measure import label, regionprops
+import shared.dataframe as dat
 
 
 DEFAULT = object()
@@ -202,3 +203,35 @@ def pix_stitch(pix_pd, num_grid):
         out = np.concatenate((out, pix_stitch_same_row(pix_pd[pix_pd['row'] == i+1], num_grid)), axis=0, out=None)
 
     return out
+
+
+def get_movie(store, cb):
+    # create stack for time series
+    pixels_tseries = []
+    max_t = store.get_max_indices().get_t()
+    for t in range(0, max_t):
+        img = store.get_image(cb.t(t).build())
+        pixels = np.reshape(img.get_raw_pixels(), newshape=[img.get_height(), img.get_width()])
+        pixels_tseries.append(pixels)
+    mov = np.stack(pixels_tseries, axis=0)
+
+    return mov
+
+
+def get_time_tseries(store, cb):
+    # get acquisition time
+    acquire_time_tseries = []
+    max_t = store.get_max_indices().get_t()
+    for t in range(0, max_t):
+        img = store.get_image(cb.t(t).build())
+        acq_time = img.get_metadata().get_received_time().split(' ')[1]
+        acquire_time_tseries.append(acq_time)
+
+    real_time_tseries = []
+    for i in range(max_t):
+        real_time_tseries.append(dat.get_time_length(0, i, acquire_time_tseries))
+
+    return acquire_time_tseries, real_time_tseries
+
+
+
