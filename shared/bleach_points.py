@@ -11,12 +11,13 @@ from skimage.morphology import binary_erosion, binary_dilation
 import pandas as pd
 
 
-def get_bleach_spots(log_pd, nucleoli, nucleoli_pd, num_dilation=3):
+def get_bleach_spots(log_pd, label_nucleoli, nucleoli_pd, num_dilation=3):
     """
     Generate bleach spots mask and corresponding pd.DataFrame table.
 
     :param log_pd: pd.DataFrame imports from .log file
-    :param nucleoli: np.array, 0-and-1, nucleoli mask
+    :param label_nucleoli: np.array, grey scale
+    :param nucleoli_pd:
     :param num_dilation: number of dilation from the coordinate; determines analysis size of the
         analysis spots; default = 3
     :return: bleach_spots_ft: np.array, 0-and-1, bleach spots mask
@@ -24,13 +25,14 @@ def get_bleach_spots(log_pd, nucleoli, nucleoli_pd, num_dilation=3):
     """
 
     # link pointer with corresponding nucleoli
-    log_pd['nucleoli'] = obj.points_in_objects(nucleoli, log_pd['x'], log_pd['y'])
+    log_pd['nucleoli'] = obj.points_in_objects(label_nucleoli, log_pd['x'], log_pd['y'])
 
     # create analysis mask for all analysis points
-    bleach_spots = ana.analysis_mask(nucleoli, log_pd['y'], log_pd['x'], num_dilation)
+    bleach_spots = ana.analysis_mask(label_nucleoli, log_pd['y'], log_pd['x'], num_dilation)
+    label_bleach_spots = label(bleach_spots, connectivity=1)
 
-    # link pointer with corresponding analysis spots
-    log_pd['bleach_spots'] = obj.points_in_objects(bleach_spots, log_pd['x'], log_pd['y'])
+    # link pointer with corresponding bleach spots
+    log_pd['bleach_spots'] = obj.points_in_objects(label_bleach_spots, log_pd['x'], log_pd['y'])
 
     # filter out analysis spots:
     # 1) aim outside of nucleoli
@@ -45,10 +47,17 @@ def get_bleach_spots(log_pd, nucleoli, nucleoli_pd, num_dilation=3):
                            & (~log_pd['bleach_spots'].isin(pointer_same_analysis_spots))]
     del pointer_ft_pd['bleach_spots']
     pointer_ft_pd = pointer_ft_pd.reset_index(drop=True)
+    print("%d bleach spots aim outside of nucleoli." % len(log_pd[(log_pd['nucleoli'] == 0)]))
+    print("%d bleach spots aim to the same nucleoli." %
+          len(log_pd[(log_pd['nucleoli'] > 0) & (log_pd['nucleoli'].isin(pointer_target_same_nucleoli))]))
+    print("%d bleach spots aim too close." % len(log_pd[(log_pd['nucleoli'] > 0)
+                                                        & (~log_pd['nucleoli'].isin(pointer_target_same_nucleoli))
+                                                        & (log_pd['bleach_spots'].isin(pointer_same_analysis_spots))]))
 
-    bleach_spots_ft = ana.analysis_mask(nucleoli, pointer_ft_pd['y'], pointer_ft_pd['x'], num_dilation)
+    bleach_spots_ft = ana.analysis_mask(label_nucleoli, pointer_ft_pd['y'], pointer_ft_pd['x'], num_dilation)
+    label_bleach_spots_ft = label(bleach_spots_ft, connectivity=1)
     # link pointer with corresponding filtered bleach spots
-    pointer_ft_pd['bleach_spots'] = obj.points_in_objects(bleach_spots_ft, pointer_ft_pd['x'], pointer_ft_pd['y'])
+    pointer_ft_pd['bleach_spots'] = obj.points_in_objects(label_bleach_spots_ft, pointer_ft_pd['x'], pointer_ft_pd['y'])
 
     # measure pointer corresponding nucleoli sizes
     pointer_nucleoli_x = []
@@ -57,14 +66,14 @@ def get_bleach_spots(log_pd, nucleoli, nucleoli_pd, num_dilation=3):
     pointer_nucleoli_int = []
     pointer_nucleoli_circ = []
     for i in range(len(pointer_ft_pd)):
-        pointer_nucleoli_x.append(nucleoli_pd['centroid_x'][pointer_ft_pd['nucleoli'][i]])
-        pointer_nucleoli_y.append(nucleoli_pd['centroid_y'][pointer_ft_pd['nucleoli'][i]])
-        pointer_nucleoli_size.append(nucleoli_pd['size'][pointer_ft_pd['nucleoli'][i]])
-        pointer_nucleoli_int.append(nucleoli_pd['mean_int'][pointer_ft_pd['nucleoli'][i]])
-        pointer_nucleoli_circ.append(nucleoli_pd['circ'][pointer_ft_pd['nucleoli'][i]])
+        pointer_nucleoli_x.append(nucleoli_pd['centroid_x'][pointer_ft_pd['nucleoli'][i]-1])
+        pointer_nucleoli_y.append(nucleoli_pd['centroid_y'][pointer_ft_pd['nucleoli'][i]-1])
+        pointer_nucleoli_size.append(nucleoli_pd['size'][pointer_ft_pd['nucleoli'][i]-1])
+        pointer_nucleoli_int.append(nucleoli_pd['mean_int'][pointer_ft_pd['nucleoli'][i]-1])
+        pointer_nucleoli_circ.append(nucleoli_pd['circ'][pointer_ft_pd['nucleoli'][i]-1])
 
     pointer_ft_pd = dat.add_columns(pointer_ft_pd, ['nucleoli_x', 'nucleoli_y', 'nucleoli_size',
-                                                    'nucleoli_int', 'nucleoli_circ'],
+                                                    'nucleoli_mean_int', 'nucleoli_circ'],
                                     [pointer_nucleoli_x, pointer_nucleoli_y, pointer_nucleoli_size,
                                      pointer_nucleoli_int, pointer_nucleoli_circ])
 
@@ -76,7 +85,6 @@ def get_frap(pointer_pd, store, cb, bleach_spots, nucleoli_pd, log_pd, num_dilat
     img = store.get_image(cb.c(0).z(0).p(0).t(0).build())
     max_t = store.get_max_indices().get_t()
     pixels = np.reshape(img.get_raw_pixels(), newshape=[img.get_height(), img.get_width()])
-    log_pd['nucleoli'] = obj.points_in_objects(pixels, log_pd['x'], log_pd['y'])
 
     # create analysis mask for control spots
     ctrl_nucleoli = ~nucleoli_pd.index.isin(log_pd['nucleoli'].tolist())
@@ -290,6 +298,7 @@ def pb_factor_fitting_single_exp(pointer_pd):
 
     return pointer_pd
 
+
 def frap_fitting_single_exp(pointer_pd):
 
     single_exp_a = []
@@ -399,18 +408,29 @@ def frap_filter(pointer_pd):
     # filter frap curves
     # 1) number of pre_bleach frame < 5
     # 2) does not find optional fit (single exponential)
-    # 3) mobile fraction < 0
-    # 3) mobile fraction > 1.5
-    # 4) maximum normalized intensity > 2
+    # 3) mobile fraction < 0 or mobile fraction > 1.5
+    # 3) r2 of fit < 0.5
 
     frap_flt = []
     for i in range(len(pointer_pd)):
-        if (pointer_pd['bleach_frame'][i] < 5) | (np.isnan(pointer_pd['single_exp_r2'][i])) \
-                | (pointer_pd['single_exp_a'][i] < 0) | (pointer_pd['single_exp_a'][i] > 1.5) \
-                | (np.max(pointer_pd['int_curve_post_nor'][i]) > 2):
+        if (pointer_pd['bleach_frame'][i] < 5) | (np.isnan(pointer_pd['single_exp_a'][i])) \
+                | (pointer_pd['single_exp_a'][i] < 0) | (pointer_pd['single_exp_a'][i] >= 1.5) \
+                | (pointer_pd['single_exp_r2'][i] < 0.5):
             frap_flt.append(0)
         else:
             frap_flt.append(1)
     pointer_pd['frap_filter'] = frap_flt
+    print("%d FRAP curves: less than 5 frames before photobleaching."
+          % len(pointer_pd[pointer_pd['bleach_frame'] < 5]))
+    print("%d FRAP curves: no optimal single exponential fit."
+          % len(pointer_pd[(pointer_pd['bleach_frame'] >= 5) & (np.isnan(pointer_pd['single_exp_a']))]))
+    print("%d FRAP curves: mobile fraction < 0 or >= 1.5."
+          % len(pointer_pd[(pointer_pd['bleach_frame'] >= 5) & (~np.isnan(pointer_pd['single_exp_a']))
+                & ((pointer_pd['single_exp_a'] < 0) | (pointer_pd['single_exp_a'] >= 1.5))]))
+    print("%d FRAP curves: r square of single exponential fit < 0.5"
+          % len(pointer_pd[(pointer_pd['bleach_frame'] >= 5) & (~np.isnan(pointer_pd['single_exp_a']))
+                & (pointer_pd['single_exp_a'] > 0) & (pointer_pd['single_exp_a'] < 1.5)
+                           & (pointer_pd['single_exp_r2'] < 0.5)]))
 
     return pointer_pd
+
