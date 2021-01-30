@@ -9,8 +9,8 @@ else:
     from matplotlib.backends.backend_qt4agg import FigureCanvas
 from matplotlib.figure import Figure
 from vispy.color import Colormap
-from skimage.measure import label
-from shared.find_organelles import find_organelle, nucleoli_analysis
+from skimage.measure import label, regionprops
+from shared.find_organelles import find_organelle, nucleoli_analysis, find_nuclear, nuclear_analysis
 import shared.analysis as ana
 import shared.display as dis
 import shared.objects as obj
@@ -23,15 +23,13 @@ import os
 # paths
 # data_path = "C:\\Users\\NicoLocal\\Images\\Jess\\20201116-Nucleoli-bleaching-4x\\PythonAcq1\\AutoBleach_15"
 data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/" \
-            "20201216_CBB_nucleoliBleachingTest_drugTreatment/Ctrl-2DG-CCCP-36pos_partial/exp_110/"
+            "20201216_CBB_nucleoliBleachingTest_drugTreatment/Ctrl-2DG-CCCP-36pos_partial/exp_111/"
 save_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/" \
-            "20201216_CBB_nucleoliBleachingTest_drugTreatment/Ctrl-2DG-CCCP-36pos_partial/exp_110/"
+            "20201216_CBB_nucleoliBleachingTest_drugTreatment/Ctrl-2DG-CCCP-36pos_partial/exp_111/"
 
 # values for analysis
-data_z = 0
 data_c = 0
-data_p = 0
-ref_t = 0  # reference frame t for nucleoli detection, bleach spots filtration
+pos = 0
 thresholding = 'local-nucleoli'
 # global thresholding method; choose in between 'na','otsu','yen', 'local-nucleoli' and 'local-sg'
 min_size = 10  # minimum nucleoli size; default = 10
@@ -42,12 +40,13 @@ num_dilation = 3  # number of dilation from the coordinate;
 
 # modes
 mode_bleach_detection = 'single-offset'  # only accepts 'single-raw' or 'single-offset'
-display_mode = 'N'  # only accepts 'N' or 'Y'
+display_mode = 'Y'  # only accepts 'N' or 'Y'
 
 # --------------------------
 # LOAD MOVIE
 # --------------------------
 print("### Load movie ...")
+data_log = pd.DataFrame({'pos': [pos]})
 
 # build up pycromanager bridge
 # first start up Micro-Manager (needs to be compatible version)
@@ -61,18 +60,31 @@ cb = mm.data().get_coords_builder()
 cb.t(0).p(0).c(0).z(0)
 
 # --------------------------------------
-# IMAGE ANALYSIS based on reference time
+# IMAGE ANALYSIS based on time 0
 # --------------------------------------
-print("### Image analysis: nucleoli detection based on reference time %s ..." % ref_t)
+print("### Image analysis: nucleoli detection based on time 0 ...")
 
-# reference image of ref_t
-temp = store.get_image(cb.p(data_p).z(data_z).c(data_c).t(ref_t).build())
+# reference image of time 0
+# if decide to use other image as ref_image
+# be sure to check photobleaching correction for all reported intensities
+temp = store.get_image(cb.c(data_c).t(0).build())
 pix = np.reshape(temp.get_raw_pixels(), newshape=[temp.get_height(), temp.get_width()])
+# nuclear detection
+label_nuclear = find_nuclear(pix)
+data_log['num_nuclei_detected'] = [np.amax(label_nuclear)]
+print("Found %d nuclei." % data_log['num_nuclei_detected'][0])
 # nucleoli detection
 nucleoli = find_organelle(pix, thresholding, min_size=min_size, max_size=max_size)
-print("Found %d nucleoli." % obj.object_count(nucleoli))
+label_nucleoli = label(nucleoli, connectivity=1)
+data_log['num_nucleoli_detected'] = [obj.object_count(nucleoli)]
+print("Found %d nucleoli." % data_log['num_nucleoli_detected'][0])
 # nucleoli pd dataset
-nucleoli_pd = nucleoli_analysis(pix, nucleoli, data_p)
+nucleoli_pd = nucleoli_analysis(pix, nucleoli, label_nuclear, pos)
+data_log['num_nucleoli_in_nuclei'] = [len(nucleoli_pd[nucleoli_pd['nuclear'] != 0])]
+print("Found %d out of %d nucleoli within nuclei." % (data_log['num_nucleoli_in_nuclei'][0],
+                                                      obj.object_count(nucleoli)))
+# nuclear pd dataset
+nuclear_pd = nuclear_analysis(label_nuclear, nucleoli_pd, pos)
 
 # ----------------------------------
 # BLEACH SPOTS DETECTION
@@ -81,13 +93,15 @@ print("### Image analysis: bleach spots detection ...")
 
 # load point_and_shoot log file
 log_pd = pd.read_csv('%s/PointAndShoot.log' % data_path, na_values=['.'], sep='\t', header=None)
-print("Aim to photobleach %d spots." % len(log_pd))
+data_log['num_aim_spots'] = [len(log_pd)]
+print("Aim to photobleach %d spots." % data_log['num_aim_spots'][0])
 log_pd = ble.get_bleach_frame(log_pd, store, cb)
 # get bleach spot coordinate
 log_pd = ble.get_bleach_spots_coordinates(log_pd, store, cb, mode_bleach_detection)
 # generate bleach spot mask
-bleach_spots, pointer_pd = ble.get_bleach_spots(log_pd, nucleoli, nucleoli_pd, num_dilation)
-print("%d spots passed filters for analysis." % obj.object_count(bleach_spots))
+bleach_spots, pointer_pd = ble.get_bleach_spots(log_pd, label_nucleoli, nucleoli_pd, num_dilation)
+data_log['num_bleach_spots'] = [obj.object_count(bleach_spots)]
+print("%d spots passed filters for analysis." % data_log['num_bleach_spots'][0])
 
 # --------------------------------------------------
 # FRAP CURVE ANALYSIS from bleach spots
@@ -103,7 +117,8 @@ pointer_pd = ble.frap_fitting_single_exp(pointer_pd)
 # filter frap curves
 pointer_pd = ble.frap_filter(pointer_pd)
 pointer_ft_pd = pointer_pd[pointer_pd['frap_filter'] == 1]
-print("%d spots passed filters for FRAP curve quality control." % len(pointer_ft_pd))
+data_log['num_frap_curves'] = [len(pointer_ft_pd)]
+print("%d spots passed filters for FRAP curve quality control." % data_log['num_frap_curves'][0])
 
 # --------------------------
 # OUTPUT
@@ -115,10 +130,14 @@ if not os.path.exists(storage_path):
     os.makedirs(storage_path)
 
 # measurements
+# data_log
+data_log.to_csv('%s/data_log.txt' % storage_path, index=False, sep='\t')
 # full dataset of all bleach spots
 pointer_pd.to_csv('%s/data_full.txt' % storage_path, index=False, sep='\t')
 # dataset of control spots
 ctrl_pd.to_csv('%s/data_ctrl.txt' % storage_path, index=False, sep='\t')
+# dataset of nuclear
+nuclear_pd.to_csv('%s/data_nuclear.txt' % storage_path, index=False, sep='\t')
 # dataset of nucleoli
 nucleoli_pd.to_csv('%s/data_nucleoli.txt' % storage_path, index=False, sep='\t')
 
@@ -128,19 +147,18 @@ pointer_out = pd.DataFrame({'bleach_spots': pointer_ft_pd['bleach_spots'],
                             'y': pointer_ft_pd['y'],
                             'nucleoli': pointer_ft_pd['nucleoli'],
                             'nucleoli_size': pointer_ft_pd['nucleoli_size'],
-                            'nucleoli_int': pointer_ft_pd['nucleoli_int'],
+                            'nucleoli_mean_int': pointer_ft_pd['nucleoli_mean_int'],
                             'bleach_frame': pointer_ft_pd['bleach_frame'],
                             'pre_bleach_int': pointer_ft_pd['pre_bleach_int'],
                             'start_int': pointer_ft_pd['frap_start_int'],
-                            'mobile_fraction': pointer_ft_pd['mobile_fraction'],
-                            't_half (s)': pointer_ft_pd['t_half'],
                             'single_exp_r2': pointer_ft_pd['single_exp_r2'],
                             'single_exp_mobile_fraction': pointer_ft_pd['single_exp_mobile_fraction'],
                             'single_exp_t_half': pointer_ft_pd['single_exp_t_half']})
 pointer_out.to_csv('%s/data.txt' % storage_path, index=False, sep='\t')
 
 # images
-dis.plot_offset_map(pointer_pd, storage_path)  # offset map
+if mode_bleach_detection == 'single-offset':
+    dis.plot_offset_map(pointer_pd, storage_path)  # offset map
 dis.plot_raw_intensity(pointer_pd, ctrl_pd, storage_path)  # raw intensity
 dis.plot_pb_factor(pointer_pd, storage_path)  # photobleaching factor
 dis.plot_corrected_intensity(pointer_pd, storage_path)  # intensity after dual correction
@@ -167,7 +185,13 @@ if display_mode == 'Y':
         mov = ana.get_movie(store, cb)
         viewer.add_image(mov, name='data')
 
-        # Layer2: nucleoli
+        # Layer2: nuclear
+        # display labeled nuclei
+        cmap1 = 'winter'
+        cmap1_woBg = dis.num_color_colormap(cmap1, np.amax(label_nuclear))[0]
+        viewer.add_image(label_nuclear, name='nuclear', colormap=('winter woBg', cmap1_woBg))
+
+        # Layer3: nucleoli
         # display nucleoli mask (violet)
         violet_woBg = Colormap([[0.0, 0.0, 0.0, 0.0], [129 / 255, 55 / 255, 114 / 255, 1.0]])
         viewer.add_image(nucleoli, name='nucleoli', contrast_limits=[0, 1], colormap=('violet woBg', violet_woBg))
@@ -181,10 +205,11 @@ if display_mode == 'Y':
         # Layer4: analysis spots
         # display bleach spots, color sorted based on corresponding nucleoli size
         # sort colormap based on analysis spots filtered
-        rgba_winter = dis.num_color_colormap('winter', len(pointer_pd))[2]
-        winter_woBg = dis.sorted_num_color_colormap(rgba_winter, pointer_pd, 'nucleoli_size', 'bleach_spots')[0]
+        cmap2 = 'winter'
+        cmap2_rgba = dis.num_color_colormap(cmap2, len(pointer_pd))[2]
+        cmap2_napari = dis.sorted_num_color_colormap(cmap2_rgba, pointer_pd, 'nucleoli_size', 'bleach_spots')[0]
         if len(pointer_pd) != 0:
-            viewer.add_image(label(bleach_spots), name='bleach spots', colormap=('winter woBg', winter_woBg))
+            viewer.add_image(label(bleach_spots), name='bleach spots', colormap=('winter woBg', cmap2_napari))
 
         # matplotlib display
         # sorted based on nucleoli size (color coded)
@@ -192,7 +217,7 @@ if display_mode == 'Y':
 
         # Plot-left: FRAP curves of filtered analysis spots after intensity correction (absolute intensity)
         for i in range(len(pointer_sort)):
-            ax1.plot(pointer_sort['mean_int'][i], color=rgba_winter[i+1])
+            ax1.plot(pointer_sort['mean_int'][i], color=cmap2_rgba[i + 1])
         ax1.set_title('FRAP curves')
         ax1.set_xlabel('time')
         ax1.set_ylabel('intensity')
@@ -202,9 +227,9 @@ if display_mode == 'Y':
         for i in range(len(pointer_sort)):
             if pointer_sort['frap_filter'][i] == 1:
                 ax2.plot(pointer_sort['real_time_post'][i], pointer_sort['int_curve_post_nor'][i],
-                         color=rgba_winter[i+1], alpha=0.5)
+                         color=cmap2_rgba[i + 1], alpha=0.5)
                 ax2.plot(pointer_sort['real_time_post'][i], pointer_sort['single_exp_fit'][i], '--',
-                         color=rgba_winter[i+1])
+                         color=cmap2_rgba[i + 1])
         ax2.set_title('FRAP curves')
         ax2.set_xlabel('time (sec)')
         ax2.set_ylabel('intensity')
@@ -213,7 +238,7 @@ if display_mode == 'Y':
         if mode_bleach_detection == 'single-offset':
             for i in range(len(pointer_sort)):
                 ax3.plot([0, pointer_sort['x_diff'][i]], [0, pointer_sort['y_diff'][i]],
-                         color=rgba_winter[i+1])
+                         color=cmap2_rgba[i + 1])
             ax3.set_xlim([-10, 10])
             ax3.set_ylim([-10, 10])
             ax3.set_title('Offset map')
