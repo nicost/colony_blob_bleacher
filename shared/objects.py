@@ -4,8 +4,10 @@
 
 import numpy as np
 import shared.warning as warn
-from skimage.morphology import remove_small_objects
+from skimage.morphology import remove_small_objects, medial_axis, extrema, binary_dilation, erosion, dilation
 from skimage.measure import label, regionprops
+from skimage.filters import sobel
+from skimage import segmentation
 import math
 
 
@@ -132,20 +134,19 @@ def obj_display_in_intensity(obj: np.array, pixels: np.array, int_range):
     return out
 
 
-def points_in_objects(obj: np.array, points_x: list, points_y: list):
+def points_in_objects(label_obj: np.array, points_x: list, points_y: list):
     """
     Correlate points with objects' labeled numbers from label(obj).
 
-    :param obj: np.array, 0-and-1
+    :param label_obj: np.array, grey scale
     :param points_x: list of points' x coordinates
     :param points_y: list of points' y coordinates
-    :return: out: list of correlated objects' numbers.
+    :return: out: list of correlated objects' label.
     """
     out = []
-    label_obj = label(obj, connectivity=1)
     if len(points_x) == len(points_y):
         for i in range(len(points_x)):
-            out.append(label_obj[points_y[i], points_x[i]] - 1)
+            out.append(label_obj[points_y[i], points_x[i]])
     else:
         raise ValueError("Length of x: %d and y: %d does not match" % (len(points_x), len(points_y)))
 
@@ -164,3 +165,49 @@ def object_count(obj: np.array):
     count_obj = len(obj_prop)
 
     return count_obj
+
+
+def label_watershed(obj: np.array):
+    """
+    Separate touching objects based on distance map (similar to imageJ watershed)
+
+    :param obj: np.array, 0-and-1
+    :return: seg: np.array, grey scale with different objects labeled with different numbers
+    """
+    _, dis = medial_axis(obj, return_distance=True)
+    maxima = extrema.h_maxima(dis, 1)
+    maxima_mask = binary_dilation(maxima)
+    for i in range(6):
+        maxima_mask = binary_dilation(maxima_mask)
+
+    label_maxima = label(maxima_mask, connectivity=2)
+    markers = label_maxima.copy()
+    markers[obj == 0] = np.amax(label_maxima) + 1
+    elevation_map = sobel(obj)
+    label_obj = segmentation.watershed(elevation_map, markers)
+    label_obj[label_obj == np.amax(label_maxima) + 1] = 0
+
+    return label_obj
+
+
+def label_remove_small(label_obj: np.array, min_size):
+    out = np.zeros_like(label_obj)
+    obj_prop = regionprops(label_obj)
+    for i in range(len(obj_prop)):
+        if obj_prop[i].area >= min_size:
+            out[label_obj == obj_prop[i].label] = obj_prop[i].label
+
+    return out
+
+
+def label_resort(label_obj: np.array):
+    count = 1
+    label_out = np.zeros_like(label_obj)
+    for i in range(np.amax(label_obj)):
+        temp = np.zeros_like(label_obj)
+        temp[label_obj == i + 1] = 1
+        if object_count(temp) > 0:
+            label_out[label_obj == i + 1] = count
+            count = count + 1
+
+    return label_out
