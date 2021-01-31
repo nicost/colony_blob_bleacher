@@ -12,6 +12,7 @@ from vispy.color import Colormap
 from skimage.measure import label, regionprops
 from shared.find_organelles import find_organelle, nucleoli_analysis, find_nuclear, nuclear_analysis
 import shared.analysis as ana
+import shared.dataframe as dat
 import shared.display as dis
 import shared.objects as obj
 import shared.bleach_points as ble
@@ -40,7 +41,7 @@ num_dilation = 3  # number of dilation from the coordinate;
 
 # modes
 mode_bleach_detection = 'single-offset'  # only accepts 'single-raw' or 'single-offset'
-display_mode = 'Y'  # only accepts 'N' or 'Y'
+display_mode = 'N'  # only accepts 'N' or 'Y'
 
 # --------------------------
 # LOAD MOVIE
@@ -55,9 +56,11 @@ mmc = bridge.get_core()
 mm = bridge.get_studio()
 # load time series data
 store = mm.data().load_data(data_path, True)
-max_t = store.get_max_indices().get_t()
 cb = mm.data().get_coords_builder()
 cb.t(0).p(0).c(0).z(0)
+# get max_t and acquisition time
+max_t = store.get_max_indices().get_t()
+acquire_time_tseries, real_time = dat.get_time_tseries(store, cb)
 
 # --------------------------------------
 # IMAGE ANALYSIS based on time 0
@@ -69,20 +72,24 @@ print("### Image analysis: nucleoli detection based on time 0 ...")
 # be sure to check photobleaching correction for all reported intensities
 temp = store.get_image(cb.c(data_c).t(0).build())
 pix = np.reshape(temp.get_raw_pixels(), newshape=[temp.get_height(), temp.get_width()])
+
 # nuclear detection
 label_nuclear = find_nuclear(pix)
 data_log['num_nuclei_detected'] = [np.amax(label_nuclear)]
 print("Found %d nuclei." % data_log['num_nuclei_detected'][0])
+
 # nucleoli detection
 nucleoli = find_organelle(pix, thresholding, min_size=min_size, max_size=max_size)
 label_nucleoli = label(nucleoli, connectivity=1)
 data_log['num_nucleoli_detected'] = [obj.object_count(nucleoli)]
 print("Found %d nucleoli." % data_log['num_nucleoli_detected'][0])
+
 # nucleoli pd dataset
 nucleoli_pd = nucleoli_analysis(pix, nucleoli, label_nuclear, pos)
 data_log['num_nucleoli_in_nuclei'] = [len(nucleoli_pd[nucleoli_pd['nuclear'] != 0])]
 print("Found %d out of %d nucleoli within nuclei." % (data_log['num_nucleoli_in_nuclei'][0],
                                                       obj.object_count(nucleoli)))
+
 # nuclear pd dataset
 nuclear_pd = nuclear_analysis(label_nuclear, nucleoli_pd, pos)
 
@@ -95,13 +102,27 @@ print("### Image analysis: bleach spots detection ...")
 log_pd = pd.read_csv('%s/PointAndShoot.log' % data_path, na_values=['.'], sep='\t', header=None)
 data_log['num_aim_spots'] = [len(log_pd)]
 print("Aim to photobleach %d spots." % data_log['num_aim_spots'][0])
-log_pd = ble.get_bleach_frame(log_pd, store, cb)
+
+# rename columns
+log_pd.columns = ['time', 'aim_x', 'aim_y']
+
+# get bleach_frame
+log_pd['bleach_frame'] = ble.get_bleach_frame(log_pd, acquire_time_tseries)
+
 # get bleach spot coordinate
-log_pd = ble.get_bleach_spots_coordinates(log_pd, store, cb, mode_bleach_detection)
+coordinate_pd = ble.get_bleach_spots_coordinates(log_pd, store, cb, data_c, mode_bleach_detection)
+log_pd = pd.concat([log_pd, coordinate_pd], axis=1)
+
 # generate bleach spot mask
-bleach_spots, pointer_pd = ble.get_bleach_spots(log_pd, label_nucleoli, nucleoli_pd, num_dilation)
+bleach_spots, pointer_pd = ble.get_bleach_spots(log_pd, label_nucleoli, num_dilation)
 data_log['num_bleach_spots'] = [obj.object_count(bleach_spots)]
 print("%d spots passed filters for analysis." % data_log['num_bleach_spots'][0])
+
+# add bleach spots corresponding nucleoli features
+pointer_pd = dat.copy_based_on_index(pointer_pd, nucleoli_pd, 'nucleoli', 'nucleoli',
+                                    ['nucleoli_x', 'nucleoli_y', 'nucleoli_size',
+                                     'nucleoli_mean_int', 'nucleoli_circ'],
+                                    ['centroid_x', 'centroid_y', 'size', 'mean_int', 'circ'])
 
 # --------------------------------------------------
 # FRAP CURVE ANALYSIS from bleach spots
