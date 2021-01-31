@@ -72,8 +72,8 @@ DISPLAYS
 # PARAMETERS ALLOW CHANGE
 # --------------------------
 # paths
-data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/SG_scoring/WT"
-save_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/SG_scoring/dataAnalysis/"
+data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/20210100_SG_scoring/WT"
+save_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/20210100_SG_scoring/dataAnalysis/"
 
 # values for analysis
 data_t = 0  # non-negative int, make sure within data range
@@ -85,10 +85,10 @@ max_size = 350  # non-negative int
 
 # modes
 analyze_boundary = 'N'  # only accepts 'N' or 'Y'
-export_mode = 'Y'  # only accepts 'N' or 'Y'
-export_pd_pre_stitch = 'Y'  # only accepts 'N' or 'Y'
+export_mode = 'N'  # only accepts 'N' or 'Y'
+export_pd_pre_stitch = 'N'  # only accepts 'N' or 'Y'
 export_pd_post_stitch = 'N'  # only accepts 'N' or 'Y'
-export_img = 'Y'  # only accepts 'N' or 'Y'
+export_img = 'N'  # only accepts 'N' or 'Y'
 display_mode = 'Y'  # only accepts 'N' or 'Y'
 
 # color-coded (cc) images calculation (added due to time concern)
@@ -143,13 +143,13 @@ for i in range(max_p+1):
 
 print("### Image analysis: Stitch image ...")
 pix_pd = pd.DataFrame({'row': row_lst, 'col': col_lst, 'pix': pix_lst})  # dataFrame of t(0).p(0) pixel images
-pix = ana.pix_stitch(pix_pd, num_grid)  # stitched image
+pix = ana.pix_stitch(pix_pd, num_grid, num_grid)  # stitched image
 
 if analyze_boundary not in ['Y', 'N']:
     raise ValueError("analyze_boundary only accepts 'Y' and 'N'. Got %s" % analyze_boundary)
 elif analyze_boundary == 'N':
     sg_pix_pd = pd.DataFrame({'row': row_lst, 'col': col_lst, 'pix': sg_lst})  # dataFrame of t(0).p(0) SG masks
-    sg = ana.pix_stitch(sg_pix_pd, num_grid)  # stitched SG masks (exclude boundary of each single FOV)
+    sg = ana.pix_stitch(sg_pix_pd, num_grid, num_grid)  # stitched SG masks (exclude boundary of each single FOV)
 else:
     sg = find_organelle(pix, thresholding, min_size=min_size, max_size=max_size)
 
