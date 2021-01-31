@@ -106,3 +106,28 @@ def find_closest(aim_x, aim_y, x_list, y_list):
             y_closest = y_temp
 
     return x_closest, y_closest
+
+
+def list_subtraction(list1: list, list2: list):
+    """
+    Subtract elements in two lists in an element wise manner
+
+    Usage examples:
+    1) > list_subtracted = list_subtraction([2, 3, 4], [1, 1, 5])
+       > print(list_subtracted)
+       > [1, 2, -1]
+
+    :param list1: list
+                list1[i]: float or int
+    :param list2: list
+                list2[i]: float or int
+    :return: list_subtracted: list
+                list_subtracted[i]: float or int
+
+    """
+    if len(list1) == len(list2):
+        list_subtracted = [list1_i - list2_i for list1_i, list2_i in zip(list1, list2)]
+    else:
+        raise ValueError("length of two provided lists for subtraction do not match.")
+
+    return list_subtracted
