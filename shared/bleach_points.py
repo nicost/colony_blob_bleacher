@@ -107,7 +107,7 @@ def get_frap(pointer_pd, store, cb, bleach_spots, nucleoli_pd, log_pd, num_dilat
             bleach_spots_int_tseries[i].append(bleach_spots_pix[i].mean_intensity)
         for i in range(len(ctrl_spots_pix)):
             ctrl_spots_int_tseries[i].append(ctrl_spots_pix[i].mean_intensity)
-    pointer_pd = dat.add_object_measurements(pointer_pd, 'raw_int', 'bleach_spots', bleach_spots_int_tseries)
+    pointer_pd['raw_int'] = bleach_spots_int_tseries
 
     # background intensity measurement
     bg_int_tseries = ana.get_bg_int(pixels_tseries)
@@ -127,14 +127,13 @@ def get_frap(pointer_pd, store, cb, bleach_spots, nucleoli_pd, log_pd, num_dilat
     num_ctrl_spots = obj.object_count(ctrl_spots)
     ctrl_pd = pd.DataFrame({'ctrl_spots': np.arange(0, num_ctrl_spots, 1), 'raw_int': ctrl_spots_int_tseries,
                             'bg_cor_int': ctrl_spots_int_cor})
-    pointer_pd = dat.add_object_measurements(pointer_pd, 'num_ctrl_spots', 'bleach_spots',
-                                             [num_ctrl_spots] * len(pointer_pd))
+    pointer_pd['num_ctrl_spots'] = [num_ctrl_spots] * len(pointer_pd)
 
     # photobleaching correction
     if num_ctrl_spots != 0:
         # calculate photobleaching factor
         pb_factor = ana.get_pb_factor(ctrl_spots_int_cor)
-        pointer_pd = dat.add_object_measurements(pointer_pd, 'pb_factor', 'bleach_spots', [pb_factor] * len(pointer_pd))
+        pointer_pd['pb_factor'] = [pb_factor] * len(pointer_pd)
         print("%d ctrl points are used to correct photobleaching." % obj.object_count(ctrl_spots))
         # pb_factor fitting with single exponential decay
         pointer_pd = pb_factor_fitting_single_exp(pointer_pd)
@@ -146,14 +145,14 @@ def get_frap(pointer_pd, store, cb, bleach_spots, nucleoli_pd, log_pd, num_dilat
             pb = pointer_pd['pb_single_exp_decay_fit'][0]
         bleach_spots_int_dual_cor = ana.pb_correction(bleach_spots_int_cor, pb)
         # add corrected intensities into pointer_ft
-        pointer_pd = dat.add_object_measurements(pointer_pd, 'mean_int', 'bleach_spots', bleach_spots_int_dual_cor)
+        pointer_pd['mean_int'] = bleach_spots_int_dual_cor
 
     return pointer_pd, ctrl_pd
 
 
 def get_bleach_frame(log_pd, store, cb):
     log_pd.columns = ['time', 'aim_x', 'aim_y']
-    acquire_time_tseries, real_time = ana.get_time_tseries(store, cb)
+    acquire_time_tseries, real_time = dat.get_time_tseries(store, cb)
     bleach_frame_pointer_fl = []  # frame number of or right after photobleaching
     for i in range(len(log_pd)):
         # number of first frame after photobleaching (num_pre)
@@ -167,7 +166,7 @@ def get_bleach_frame(log_pd, store, cb):
 
 def frap_analysis(pointer_pd, store, cb):
     max_t = store.get_max_indices().get_t()
-    acquire_time_tseries, real_time = ana.get_time_tseries(store, cb)
+    acquire_time_tseries, real_time = dat.get_time_tseries(store, cb)
     # for all the bleach spots
     frap_start_frame = []  # bleach_frame + 4
     # frame number of the minimum intensity
