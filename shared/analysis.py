@@ -1,13 +1,62 @@
-# ------------------------------------------
-# FUNCTIONS for NON 0-AND-1 NP.ARRAY (IMAGE)
-# ------------------------------------------
-
 import numpy as np
 from skimage.feature import peak_local_max
 from skimage.filters import rank, threshold_triangle
 from skimage.morphology import disk, opening, dilation, binary_dilation
-from skimage.measure import label, regionprops
+from skimage.measure import label, regionprops_table
 import shared.dataframe as dat
+import shared.objects as obj
+import pandas as pd
+
+"""
+# ---------------------------------------------------------------------------------------------------
+# FUNCTIONS for NON 0-AND-1 NP.ARRAY (IMAGE)
+# ---------------------------------------------------------------------------------------------------
+
+bleach_location
+    FUNCTION:
+    SYNTAX:   bleach_location(pre_pixels: np.array, post_pixels: np.array, expected_position=DEFAULT, 
+              half_roi_size=DEFAULT)
+    
+central_pixel_without_cells
+    FUNCTION: 
+    SYNTAX:   central_pixel_without_cells(pixels: np.array)
+
+analysis_mask
+    FUNCTION: generates a dilated mask from given points
+    SYNTAX:   analysis_mask(x: list, y: list, pixels_same_size: np.array, num_dilation=3)
+
+get_bg_int
+    FUNCTION: measure background intensities from a given movie
+    SYNTAX:   get_bg_int(pixels_tseries: list)
+
+bg_correction
+    FUNCTION: background correction of time series intensities for multiple points
+    SYNTAX:   bg_correction(int_tseries_multiple_points: list, bg_int_tseries: list)
+ 
+get_pb_factor
+    FUNCTION: measure photobleaching factor from given time series intensities of multiple 
+              control points
+    SYNTAX:   get_pb_factor(int_tseries_ctrl_spots: list)
+    
+pb_correction
+    FUNCTION: photobleaching correction of time series intensities
+    SYNTAX:   pb_correction(int_tseries_multiple_points: list, pb_factor: list)
+
+pix_stitch_same_row
+    FUNCTION: stitch same size images in a row as a single image (empty space filled with same size 
+              black images)
+    SYNTAX:   pix_stitch_same_row(pixels_pd: pd.DataFrame, num_col: int)
+
+pix_stitch
+    FUNCTION: stitch same size images into a single image based on provided location (empty space 
+              filled with same size black images)
+    SYNTAX:   pix_stitch(pixels_pd: pd.DataFrame, num_col: int, num_row: int)
+
+get_time_tseries
+    FUNCTION: get acquisition time from uManager data
+    SYNTAX:   get_time_tseries(store, cb)
+    
+"""
 
 
 DEFAULT = object()
@@ -86,25 +135,38 @@ def central_pixel_without_cells(pixels: np.array):
     return False
 
 
-def analysis_mask(pixels: np.array, x: list, y: list, num_dilation=3):
+def analysis_mask(x: list, y: list, pixels_same_size: np.array, num_dilation=3):
     """
-    Generates an analysis mask from all the points' x,y positions.
+    Generates a dilated mask from given points
 
-    Expects img_example to be the same size as the expected output. With the given x,y
-    positions, a 0-and-1 binary mask is generated after dilating certain rounds from the
-    given coordinates.
+    Algorithm description:
+    Performs serial dilation (total rounds = num_dilation) from the provided x,y coordinates and
+    exports the dilated image as a binary mask using the image size provided from pixels_same_size
 
-    :param pixels: nd.array
-                Requires to be the same size as the output.
+    Usage examples:
+    1) used to generate bleach spots mask for FRAP analysis
+
     :param x: list
-                List of x coordinates.
+                list of x coordinates of the points, requires len(x) = len(y), otherwise raises
+                ValueError
     :param y: list
-                List of y coordinates
+                list of y coordinates of the points, requires len(x) = len(y), otherwise raises
+                ValueError
+    :param pixels_same_size: nd.array
+                requires to be the same size as the expected output
+                img_same_size will only be used to get the width/height information to determine
+                output size, but not for any analysis purposes
     :param num_dilation: int, optional (default: 3)
-                Number of dilation applied from the coordinates.
-    :return: out: nd.array, 0-and-1, same shape and type as input pixels
+                number of dilation applied from the coordinates
+                determines the size of the generated mask for each point
+                default number was determined for FRAP analysis
+    :return: out: nd.array, binary image
+                same size as img_same_size
+                1: points regions
+                0: background
+
     """
-    out = np.zeros_like(pixels)
+    out = np.zeros_like(pixels_same_size)
 
     if len(x) == len(y):
         for i in range(len(x)):
@@ -117,110 +179,255 @@ def analysis_mask(pixels: np.array, x: list, y: list, num_dilation=3):
     return out
 
 
-def get_bg_int(t_pixels: list):
+def get_bg_int(pixels_tseries: list):
     """
-    Measure background intensities of a given movie.
+    Measure background intensities from a given movie
 
-    :param t_pixels: list, time series of np.array (movie)
-    :return: t_bg_int: list of background intensities
+    Algorithm description:
+    For each time frame from the movie pixels_tseries, generate binary image of regions that
+    pixel intensity < 300, remove regions whose area < 50 and return the mean intensity of the
+    largest area as background intensity for this given time frame.
+
+    Usage examples:
+    1) used for background correction
+
+    Note:
+    1) function was originally designed for getting background series from a movie, but can also
+        be applied to get background intensity from a single image. If so, please do:
+        bg_int = get_bg_int([pixels])[0]
+
+    :param pixels_tseries: list
+                time series of np.array (movie), e.g. [pixel1, pixel2, ...]
+                pixels_tseries[i]: np.array, pixels at time frame i
+    :return: bg_int_tseries: list, 0 indicates background intensity detection failure
+                list of background intensities, e.g. [bg_1, bg_2, ...]
+                t_bg_int[i]: float, bg_int at frame i
+
     """
-    t_bg_int = []
-    for i in range(len(t_pixels)):
-        bg = np.zeros_like(t_pixels[i])
-        bg[t_pixels[i] < 300] = 1
-        bg_prop = regionprops(label(bg), t_pixels[i])
-        t_bg_int.append(bg_prop[0].mean_intensity)
+    bg_int_tseries = []
+    for i in range(len(pixels_tseries)):
+        # get regions whose pixel intensity < 300
+        bg = np.zeros_like(pixels_tseries[i])
+        bg[pixels_tseries[i] < 300] = 1
+        # remove regions < 50
+        bg = obj.remove_small(bg, 50)
+        # measure bg object properties
+        bg_props = regionprops_table(label(bg), pixels_tseries[i], properties=['area', 'mean_intensity'])
+        bg_prop_pd = pd.DataFrame(bg_props)
 
-    return t_bg_int
-
-
-def bg_correction(t_int: list, t_bg_int: list):
-    """
-    Background correction of time series intensities.
-
-    :param t_int: list of time series intensities of multiple points
-    :param t_bg_int: list of background intensities
-    :return: out: list of background corrected time series intensities of multiple points
-    """
-    out = [[] for _ in range(len(t_int))]
-    for i in range(len(t_int)):
-        if len(t_int[i]) == len(t_bg_int):
-            for t in range(len(t_int[i])):
-                if t_int[i][t]-t_bg_int[t] > 0:
-                    out[i].append(t_int[i][t]-t_bg_int[t])
-                else:
-                    out[i].append(0)
+        # high intensity image, do not have pixel intensity of any connected 50 pixels < 300
+        if len(bg_prop_pd) == 0:
+            # set bg_int as 0 to get the script going without interruption
+            # 0 should not affect bg intensity curve fitting
+            bg_int_tseries.append(0)
+        elif len(bg_prop_pd) == 1:
+            bg_int_tseries.append(bg_prop_pd['mean_intensity'][0])
         else:
-            raise ValueError("Length of intensities: %d does not match with background intensities: %d"
-                             % (len(t_int[i]), len(t_bg_int)))
+            # find the mean_intensity of the largest area
+            max_area = max(bg_prop_pd['area'])
+            bg_int_temp = bg_prop_pd[bg_prop_pd['area'] == max_area]['mean_intensity'][0]
+            bg_int_tseries.append(bg_int_temp)
 
-    return out
+    return bg_int_tseries
 
 
-def get_pb_factor(t_int: list):
+def bg_correction(int_tseries_multiple_points: list, bg_int_tseries: list):
     """
-    Measure photobleaching factor from given time series intensities of multiple control points.
+    Background correction of time series intensities for multiple points
 
-    :param t_int: list of time series intensities of multiple points
-    :return: pb_factor: list of photobleaching factors
-    """
-    pb_factor = []
-    for t in range(len(t_int[0])):
-        pb_ratio = []
-        for i in range(len(t_int)):
-            pb_ratio.append(np.mean(t_int[i][t])/np.mean(t_int[i][0]))
-        pb_factor.append(np.mean(pb_ratio))
+    Algorithm description:
+    corrected intensity = measured intensity - background intensity
 
-    return pb_factor
+    Usage examples:
+    1) used for background correction
 
+    :param int_tseries_multiple_points: list
+                list of time series intensities of multiple points
+                e.g. [[point1_t0, point1_t1 ...], [point2_t0, point2_t1, ...], ...]
+                int_tseries_multiple_points[i]: list, intensity series of point i
+    :param bg_int_tseries: list
+                list of background intensities, e.g. [bg_1, bg_2, ...]
+                t_bg_int[i]: float, bg_int at frame i
+    :return: out: list
+                background corrected time series intensities of multiple points
+                corrected intensities <0 were set to 0
 
-def pb_correction(t_int: list, pb_factor: list):
-    """
-    Photobleaching correction of time series intensities.
-
-    :param t_int: list of time series intensities of multiple points
-    :param pb_factor: list of photobleaching factors
-    :return: out: list of photobleaching corrected time series intensities of multiple points
     """
     out = []
-    for i in range(len(t_int)):
-        out.append(np.divide(t_int[i], pb_factor))
+    # for each point
+    num_points = len(int_tseries_multiple_points)
+    for i in range(num_points):
+        # calculate corrected intensities
+        int_tseries_cor = dat.list_subtraction(int_tseries_multiple_points[i], bg_int_tseries)
+        # set any negative value to 0
+        int_tseries_cor = [0 if i < 0 else i for i in int_tseries_cor]
+        # store corrected intensity
+        out.append(int_tseries_cor)
 
     return out
 
 
-def pix_stitch_same_row(pix_pd, num_grid):
-    out = pix_pd[pix_pd['col'] == 0].iloc[0]['pix']
-    for i in range(num_grid-1):
-        out = np.concatenate((out, pix_pd[pix_pd['col'] == i+1].iloc[0]['pix']), axis=1, out=None)
+def get_pb_factor(int_tseries_ctrl_spots: list):
+    """
+    Measure photobleaching factor from given time series intensities of multiple control points
+
+    Algorithm description:
+    pb_factor[i] = mean(ctrl_t[i]/ctrl_t[0])
+
+    Usage examples:
+    1) used for photobleaching correction
+
+    :param int_tseries_ctrl_spots: list
+                list of time series intensities of ctrl points
+                e.g. [[ctrl1_t0, ctrl1_t1 ...], [ctrl2_t0, ctrl2_t1, ...], ...]
+                int_tseries_ctrl_points[i]: list, intensity series of ctrl point i
+    :return: pb_factor: list
+                list of photobleaching factors, e.g. [pb_factor_t0, pb_factor_t1, ...]
+                pb_factor[i]: float, (0,1]
+
+    """
+    pb_factor_tseries = []
+    # for each time frame
+    for t in range(len(int_tseries_ctrl_spots[0])):
+        pb_ratio = []
+        # calculate pb_ratio ctrl_t(t)/ctrl_t(0) for each single ctrl spots
+        for i in range(len(int_tseries_ctrl_spots)):
+            pb_ratio.append(np.mean(int_tseries_ctrl_spots[i][t]) / np.mean(int_tseries_ctrl_spots[i][0]))
+        # calculate pb_factor
+        pb_factor = np.mean(pb_ratio)
+        pb_factor_tseries.append(pb_factor)
+
+    return pb_factor_tseries
+
+
+def pb_correction(int_tseries_multiple_points: list, pb_factor: list):
+    """
+    Photobleaching correction of time series intensities
+
+    Algorithm description:
+    corrected intensity = measured intensity / pb_factor
+
+    Usage examples:
+    1) used for photobleaching correction
+
+    :param int_tseries_multiple_points: list
+                list of time series intensities of multiple points
+                e.g. [[point1_t0, point1_t1 ...], [point2_t0, point2_t1, ...], ...]
+                int_tseries_multiple_points[i]: list, intensity series of point i
+    :param pb_factor: list
+                list of photobleaching factors, e.g. [pb_factor_t0, pb_factor_t1, ...]
+                pb_factor[i]: float, (0,1]
+    :return: out: list
+                photobleaching corrected time series intensities of multiple points
+
+    """
+    out = []
+    num_points = len(int_tseries_multiple_points)
+    for i in range(num_points):
+        out.append(np.divide(int_tseries_multiple_points[i], pb_factor))
 
     return out
 
 
-def pix_stitch(pix_pd, num_grid):
-    out = pix_stitch_same_row(pix_pd[pix_pd['row'] == 0], num_grid)
-    for i in range(num_grid-1):
-        out = np.concatenate((out, pix_stitch_same_row(pix_pd[pix_pd['row'] == i+1], num_grid)), axis=0, out=None)
+def pix_stitch_same_row(pixels_pd: pd.DataFrame, num_col: int):
+    """
+    Stitch same size images in a row as a single image (empty space filled with same size black images)
+
+    Usage examples:
+    1) > print(pixels_pd)
+       > col     pix
+         0       pixel_0
+         1       pixel_1
+         3       pixel_2
+       > stitched_image = pix_stitch_same_row(pixels_pd, 5)
+       > print(stitched_image)
+       > pixel_0 - pixel_1 - empty_img - pixel_2 - empty_img
+
+    :param pixels_pd: pd.DataFrame, columns includes 'col', 'pix'
+                'col': int, column number of the image in the stitched image, start from 0
+                'pix': np.array, pixels of the image
+    :param num_col: int
+    :return: out: np.array, stitched images
+
+    """
+    # start with first image
+    if 0 in pixels_pd['col'].tolist():
+        # if image exists, assign first image to out
+        out = pixels_pd[pixels_pd['col'] == 0].iloc[0]['pix']
+    else:
+        # if not exist, assign empty image to out
+        out = np.zeros_like(pixels_pd.iloc[0]['pix'])
+
+    # concatenate the other images sequentially on the right side of the first image
+    for i in range(num_col - 1):
+        # if image exists, assign corresponding image
+        if (i+1) in pixels_pd['col'].tolist():
+            out = np.concatenate((out, pixels_pd[pixels_pd['col'] == i+1].iloc[0]['pix']), axis=1, out=None)
+        # if not exist, assign empty image
+        else:
+            out = np.concatenate((out, np.zeros_like(pixels_pd.iloc[0]['pix'])), axis=1, out=None)
 
     return out
 
 
-def get_movie(store, cb):
-    # create stack for time series
-    pixels_tseries = []
-    max_t = store.get_max_indices().get_t()
-    for t in range(0, max_t):
-        img = store.get_image(cb.t(t).build())
-        pixels = np.reshape(img.get_raw_pixels(), newshape=[img.get_height(), img.get_width()])
-        pixels_tseries.append(pixels)
-    mov = np.stack(pixels_tseries, axis=0)
+def pix_stitch(pixels_pd: pd.DataFrame, num_col: int, num_row: int):
+    """
+    Stitch same size images into a single image based on provided location
+    (empty space filled with same size black images)
 
-    return mov
+    Usage examples:
+    1) > print(pixels_pd)
+       > row    col     pix
+         0      0       pixel_0
+         0      1       pixel_1
+         0      3       pixel_2
+         1      0       pixel_3
+         1      2       pixel_4
+         1      4       pixel_5
+       > stitched_image = pix_stitch(pixels_pd, 5, 2)
+       > print(stitched_image)
+       > pixel_0 -  pixel_1  - empty_img -  pixel_2  - empty_img
+         pixel_3 - empty_img -  pixel_4  - empty_img -  pixel_5
+
+    :param pixels_pd: pd.DataFrame, columns includes 'row', 'col', 'pix'
+                'row': int, row number of the image in the stitched image, start from 0
+                'col': int, column number of the image in the stitched image, start from 0
+                'pix': np.array, pixels of the image
+    :param num_col: number of columns of stitched images
+    :param num_row: number of rows of stitched images
+    :return: out: np.array, stitched images
+
+    """
+    # first row
+    out = pix_stitch_same_row(pixels_pd[pixels_pd['row'] == 0], num_col)
+    # stitch the following rows beneath the first row
+    for i in range(num_row-1):
+        out = np.concatenate((out, pix_stitch_same_row(pixels_pd[pixels_pd['row'] == i + 1], num_col)),
+                             axis=0, out=None)
+
+    return out
 
 
 def get_time_tseries(store, cb):
+    """
+    Get acquisition time from uManager data
+
+    Usage examples:
+    1) find bleach frame for FRAP analysis
+
+    :param store: store = mm.data().load_data(data_path, True)
+    :param cb: cb = mm.data().get_coords_builder()
+    :return: acquire_time_tseries: list
+                list of acquisition time display in 'hour:min:sec' format
+                e.g. ['17:30:38.360', '17:30:38.455', '17:30:38.536', '17:30:38.615', ...]
+             real_time_tseries: list
+                list of time in sec with first frame set as 0
+                e.g. [0.0, 0.09499999999999886, 0.17600000000000193, 0.25500000000000256, ...]
+
+    """
     # get acquisition time
     acquire_time_tseries = []
+
     max_t = store.get_max_indices().get_t()
     for t in range(0, max_t):
         img = store.get_image(cb.t(t).build())
@@ -232,6 +439,3 @@ def get_time_tseries(store, cb):
         real_time_tseries.append(dat.get_time_length(0, i, acquire_time_tseries))
 
     return acquire_time_tseries, real_time_tseries
-
-
-
