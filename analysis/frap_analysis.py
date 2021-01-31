@@ -182,7 +182,7 @@ if display_mode == 'Y':
         # napari display
         # Layer1: data
         # display time series movies in napari main viewer
-        mov = ana.get_movie(store, cb)
+        mov = dis.napari_movie(store, cb)
         viewer.add_image(mov, name='data')
 
         # Layer2: nuclear
