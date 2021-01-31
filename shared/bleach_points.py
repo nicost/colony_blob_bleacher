@@ -10,103 +10,269 @@ from skimage.filters import threshold_otsu
 from skimage.morphology import binary_erosion, binary_dilation
 import pandas as pd
 
+"""
+# ---------------------------------------------------------------------------------------------------
+# FUNCTIONS for BLEACH SPOTS/FRAP ANALYSIS
+# ---------------------------------------------------------------------------------------------------
 
-def get_bleach_spots(log_pd, label_nucleoli, nucleoli_pd, num_dilation=3):
+pd.DataFrame related:
+
+    get_bleach_frame
+        FUNCTION: get bleach frames of all the potential bleach spots
+        SYNTAX:   get_bleach_frame(log_pd: pd.DataFrame, acquire_time_tseries: list)
+    
+    get_bleach_spots_coordinates
+        FUNCTION: get coordinates of bleach spots
+        SYNTAX:   get_bleach_spots_coordinates(log_pd: pd.DataFrame, store, cb, data_c: int, mode: str)
+    
+    get_bleach_spots
+        FUNCTION: generate bleach spots mask and corresponding pd.DataFrame table
+        SYNTAX:   get_bleach_spots(log_pd: pd.DataFrame, label_nucleoli: np.array, num_dilation=3)
+    
+    filter_bleach_spots
+        FUNCTION: filter bleach spots
+        SYNTAX:   filter_bleach_spots(log_pd: pd.DataFrame)
+    
+    
+"""
+
+
+def get_bleach_frame(log_pd: pd.DataFrame, acquire_time_tseries: list):
     """
-    Generate bleach spots mask and corresponding pd.DataFrame table.
+    Get bleach frames of all the potential bleach spots
 
-    :param log_pd: pd.DataFrame imports from .log file
-    :param label_nucleoli: np.array, grey scale
-    :param nucleoli_pd:
-    :param num_dilation: number of dilation from the coordinate; determines analysis size of the
-        analysis spots; default = 3
-    :return: bleach_spots_ft: np.array, 0-and-1, bleach spots mask
-             pointer_ft_pd: pd.DataFrame of pointer information after filter
+    :param log_pd: pd.DataFrame, requires columns 'time'
+                'time': photobleaching time displayed in uManager metadata format
+    :param acquire_time_tseries: list
+                list of acquisition time displayed in 'hour:min:sec' format
+                e.g. ['17:30:38.360', '17:30:38.455', '17:30:38.536', '17:30:38.615', ...]
+    :return: bleach_frame: list, list of bleach frames
+
+    """
+    bleach_frame = []  # frame number of or right after photobleaching
+    for i in range(len(log_pd)):
+        # number of first frame after photobleaching (num_pre)
+        num_pre = dat.find_pos(log_pd['time'][i].split(' ')[1], acquire_time_tseries)
+        bleach_frame.append(num_pre)
+
+    return bleach_frame
+
+
+def get_bleach_spots_coordinates(log_pd: pd.DataFrame, store, cb, data_c: int, mode: str):
+    """
+    Get coordinates of bleach spots
+
+    Algorithm description:
+    single-raw:
+        use single coordinates from raw log file to track FRAP for the whole movie
+    single-offset:
+        use single coordinates detected from intensity change around photobleaching for the whole movie.
+        for each pointer (center coordinates of potential bleach spot), its minimum intensity after
+        photobleaching was generally detected at bleach frame + 4. this image was subtracted from image
+        at bleach frame (before photobleaching) and add 100 to smooth background noise.  otsu global
+        thresholding was then applied to find the bright spots (detected bleach spots). two rounds of
+        erosion/dilation was applied to clean background and the closest round of the centroid coordinates
+        of the closest detected bleach spots was used as the new coordinates of given bleach spot/pointer.
+
+    Usage examples:
+    1) used for detecting bleach spots
+
+    :param log_pd: pd.DataFrame, requires columns 'aim_x', 'aim_y', 'bleach_frame'
+                'aim_x': x coordinates of aim during photobleaching experiment
+                'aim_y': y coordinates of aim during photobleaching experiment
+                'bleach_frame': photobleaching frame
+    :param store: store: store = mm.data().load_data(data_path, True)
+    :param cb: cb = mm.data().get_coords_builder()
+    :param data_c: channel to be analyzed
+    :param mode: bleach spot detection mode, currently only accepts 'single-raw' and 'single-offset'
+    :return: dataframe: pd.DataFrame, same index as log_pd with columns 'x', 'y', 'x_diff', 'y_diff'
+
+    """
+    if mode == 'single-raw':
+        dataframe = pd.DataFrame({'x': log_pd['aim_x'],
+                                  'y': log_pd['aim_y'],
+                                  'x_diff': [0] * len(log_pd),
+                                  'y_diff': [0] * len(log_pd)})
+
+    elif mode == 'single-offset':
+        x_lst = []
+        y_lst = []
+        for i in range(len(log_pd)):
+            aim_x = log_pd['aim_x'][i]
+            aim_y = log_pd['aim_y'][i]
+            bleach_frame = int(log_pd['bleach_frame'][i])
+
+            # subtract minimum intensity image pix(bleach_frame+4) and image before photobleaching
+            post = store.get_image(cb.p(0).z(0).c(data_c).t(bleach_frame+4).build())
+            pix_post = np.reshape(post.get_raw_pixels(), newshape=[post.get_height(), post.get_width()])
+            pre = store.get_image(cb.p(0).z(0).c(data_c).t(bleach_frame).build())
+            pix_pre = np.reshape(pre.get_raw_pixels(), newshape=[pre.get_height(), pre.get_width()])
+            pix = pix_post - pix_pre + 100
+
+            # otsu global thresholding to find bright spots
+            otsu_val = threshold_otsu(pix)
+            otsu = pix > otsu_val
+            # two rounds of erosion/dilation to clear out noises
+            bleach = binary_erosion(otsu)
+            bleach = binary_erosion(bleach)
+            bleach = binary_dilation(bleach)
+            bleach = binary_dilation(bleach)
+
+            # tried to use local maxima to find bleach spots, not good
+            # local structure will interfere with intensity detection
+            """if mode == 'local_maxima':
+                label_bleach = label(bleach)
+                for m in range(np.amax(label_bleach)):
+                    mask = np.zeros_like(pix)
+                    mask[label_bleach == m+1] = 1
+                    bleach_pix = pix.copy()
+                    bleach_pix[mask == 0] = 0
+                    peaks = peak_local_max(bleach_pix, min_distance=20)
+                    if len(peaks) > 0:
+                        for n in peaks:
+                            peak_x.append(n[1])
+                            peak_y.append(n[0])"""
+
+            # use centroid to find bleach spots
+            # local maxima is largely affected by intensity from other cellular feature
+            bleach_prop = regionprops(label(bleach))
+            peak_x = [round(p.centroid[1]) for p in bleach_prop]
+            peak_y = [round(p.centroid[0]) for p in bleach_prop]
+
+            if len(peak_x) == 1:  # found one bright spot
+                x_lst.append(peak_x[0])
+                y_lst.append(peak_y[0])
+            elif len(peak_x) > 1:  # found more than one bright spots
+                x_closest, y_closest = dat.find_closest(aim_x, aim_y, peak_x, peak_y)
+                x_lst.append(x_closest)
+                y_lst.append(y_closest)
+            else:  # do not find any bright spots, use the coordinates from log file
+                x_lst.append(log_pd['aim_x'][i])
+                y_lst.append(log_pd['aim_y'][i])
+
+        dataframe = pd.DataFrame({'x': x_lst, 'y': y_lst})
+        dataframe['x_diff'] = dataframe['x'] - log_pd['aim_x']
+        dataframe['y_diff'] = log_pd['aim_y'] - dataframe['y']
+
+    else:
+        dataframe = pd.DataFrame()
+
+    return dataframe
+
+
+def get_bleach_spots(log_pd: pd.DataFrame, label_nucleoli: np.array, num_dilation=3):
+    """
+    Generate bleach spots mask and corresponding pd.DataFrame table
+
+    :param log_pd: pd.DataFrame, requires columns 'x', 'y'
+                'x': x coordinates of all possible bleach spots
+                'y': y coordinates of all possible bleach spots
+                originally imports from .log file
+    :param label_nucleoli: np.array, grey scale labeled nucleoli image
+    :param num_dilation: int, optional (default: 3)
+                number of dilation applied from the coordinates
+                determines the size of the generated mask for each point
+                default number was determined for FRAP analysis
+    :return: bleach_spots_ft: np.array, 0-and-1
+                bleach spots mask
+             pointer_pd: pd.DataFrame
+                pointer dataframe, add corresponding bleach spots/nucleoli information
+                sorted based on bleach spots, ascending
+
     """
 
-    # link pointer with corresponding nucleoli
+    # link pointer with corresponding nucleoli/ detected bleach spots
     log_pd['nucleoli'] = obj.points_in_objects(label_nucleoli, log_pd['x'], log_pd['y'])
-
-    # create analysis mask for all analysis points
     bleach_spots = ana.analysis_mask(log_pd['y'], log_pd['x'], label_nucleoli, num_dilation)
     label_bleach_spots = label(bleach_spots, connectivity=1)
-
-    # link pointer with corresponding bleach spots
     log_pd['bleach_spots'] = obj.points_in_objects(label_bleach_spots, log_pd['x'], log_pd['y'])
 
-    # filter out analysis spots:
-    # 1) aim outside of nucleoli
-    # 2) bleach the same nucleoli
-    # 3) too close to merge as a single analysis spots
+    # filter bleach spots
+    pointer_pd = filter_bleach_spots(log_pd)
+
+    # generate bleach spots mask (after filtering)
+    bleach_spots_ft = ana.analysis_mask(pointer_pd['y'], pointer_pd['x'], label_nucleoli, num_dilation)
+    label_bleach_spots_ft = label(bleach_spots_ft, connectivity=1)
+
+    # link pointer with corresponding filtered bleach spots
+    pointer_pd['bleach_spots'] = obj.points_in_objects(label_bleach_spots_ft, pointer_pd['x'], pointer_pd['y'])
+    pointer_pd = pointer_pd.sort_values(by='bleach_spots').reset_index(drop=True)
+
+    return bleach_spots_ft, pointer_pd
+
+
+def filter_bleach_spots(log_pd: pd.DataFrame):
+    """
+    Filter bleach spots
+
+    Filter out bleach spots:
+    1) aim outside of nucleoli
+    2) bleach the same nucleoli
+    3) too close to merge as a single bleach spots
+
+    :param log_pd: pd.DataFrame, requires columns 'nucleoli', 'bleach_spots'
+                'nucleoli': corresponding nucleoli label index
+                'bleach_spots': corresponding bleach spots label index
+    :return: pointer_pd: pd.DataFrame
+                pointer dataframe of all filtered bleach spots
+
+    """
+    # mask2
     pointer_target_same_nucleoli = \
         [item for item, count in collections.Counter(log_pd['nucleoli'].tolist()).items() if count > 1]
+    # mask3
     pointer_same_analysis_spots = \
         [item for item, count in collections.Counter(log_pd['bleach_spots'].tolist()).items() if count > 1]
-    pointer_ft_pd = log_pd[(log_pd['nucleoli'] > 0)
-                           & (~log_pd['nucleoli'].isin(pointer_target_same_nucleoli))
-                           & (~log_pd['bleach_spots'].isin(pointer_same_analysis_spots))]
-    del pointer_ft_pd['bleach_spots']
-    pointer_ft_pd = pointer_ft_pd.reset_index(drop=True)
-    print("%d bleach spots aim outside of nucleoli." % len(log_pd[(log_pd['nucleoli'] == 0)]))
-    print("%d bleach spots aim to the same nucleoli." %
-          len(log_pd[(log_pd['nucleoli'] > 0) & (log_pd['nucleoli'].isin(pointer_target_same_nucleoli))]))
-    print("%d bleach spots aim too close." % len(log_pd[(log_pd['nucleoli'] > 0)
-                                                        & (~log_pd['nucleoli'].isin(pointer_target_same_nucleoli))
-                                                        & (log_pd['bleach_spots'].isin(pointer_same_analysis_spots))]))
 
-    bleach_spots_ft = ana.analysis_mask(pointer_ft_pd['y'], pointer_ft_pd['x'], label_nucleoli, num_dilation)
-    label_bleach_spots_ft = label(bleach_spots_ft, connectivity=1)
-    # link pointer with corresponding filtered bleach spots
-    pointer_ft_pd['bleach_spots'] = obj.points_in_objects(label_bleach_spots_ft, pointer_ft_pd['x'], pointer_ft_pd['y'])
+    # filter all the pointers from log to generate real pointer_pd
+    pointer_pd = log_pd[(log_pd['nucleoli'] > 0)
+                        & (~log_pd['nucleoli'].isin(pointer_target_same_nucleoli))
+                        & (~log_pd['bleach_spots'].isin(pointer_same_analysis_spots))]
+    del pointer_pd['bleach_spots']  # delete previous bleach_spots information
+    pointer_pd = pointer_pd.reset_index(drop=True)  # reset index
 
-    # measure pointer corresponding nucleoli sizes
-    pointer_nucleoli_x = []
-    pointer_nucleoli_y = []
-    pointer_nucleoli_size = []
-    pointer_nucleoli_int = []
-    pointer_nucleoli_circ = []
-    for i in range(len(pointer_ft_pd)):
-        pointer_nucleoli_x.append(nucleoli_pd['centroid_x'][pointer_ft_pd['nucleoli'][i]-1])
-        pointer_nucleoli_y.append(nucleoli_pd['centroid_y'][pointer_ft_pd['nucleoli'][i]-1])
-        pointer_nucleoli_size.append(nucleoli_pd['size'][pointer_ft_pd['nucleoli'][i]-1])
-        pointer_nucleoli_int.append(nucleoli_pd['mean_int'][pointer_ft_pd['nucleoli'][i]-1])
-        pointer_nucleoli_circ.append(nucleoli_pd['circ'][pointer_ft_pd['nucleoli'][i]-1])
+    # print number of pointers failed to pass each filter
+    # filters applied later will not count the ones that fail from the previous filters
+    num_filter1 = len(log_pd[(log_pd['nucleoli'] == 0)])
+    print("%d bleach spots aim outside of nucleoli." % num_filter1)
+    num_filter2 = len(log_pd[(log_pd['nucleoli'] > 0) & (log_pd['nucleoli'].isin(pointer_target_same_nucleoli))])
+    print("%d bleach spots aim to the same nucleoli." % num_filter2)
+    num_filter3 = len(log_pd[(log_pd['nucleoli'] > 0) & (~log_pd['nucleoli'].isin(pointer_target_same_nucleoli))
+                             & (log_pd['bleach_spots'].isin(pointer_same_analysis_spots))])
+    print("%d bleach spots aim too close." % num_filter3)
 
-    pointer_ft_pd = dat.add_columns(pointer_ft_pd, ['nucleoli_x', 'nucleoli_y', 'nucleoli_size',
-                                                    'nucleoli_mean_int', 'nucleoli_circ'],
-                                    [pointer_nucleoli_x, pointer_nucleoli_y, pointer_nucleoli_size,
-                                     pointer_nucleoli_int, pointer_nucleoli_circ])
-
-    return bleach_spots_ft, pointer_ft_pd
+    return pointer_pd
 
 
-def get_frap(pointer_pd, store, cb, bleach_spots, nucleoli_pd, log_pd, num_dilation=3):
+def get_frap(pointer_pd: pd.DataFrame, store, cb, bleach_spots: np.array, nucleoli_pd: pd.DataFrame,
+             log_pd: pd.DataFrame, num_dilation=3):
 
+    # get image size of any frame
     img = store.get_image(cb.c(0).z(0).p(0).t(0).build())
     max_t = store.get_max_indices().get_t()
     pixels = np.reshape(img.get_raw_pixels(), newshape=[img.get_height(), img.get_width()])
 
     # create analysis mask for control spots
     ctrl_nucleoli = ~nucleoli_pd.index.isin(log_pd['nucleoli'].tolist())
-    ctrl_centroids_x = nucleoli_pd[ctrl_nucleoli]['centroid_x'].astype(int).tolist()
-    ctrl_centroids_y = nucleoli_pd[ctrl_nucleoli]['centroid_y'].astype(int).tolist()
-    ctrl_spots = ana.analysis_mask(ctrl_centroids_x, ctrl_centroids_y, pixels, num_dilation)
+    ctrl_x = nucleoli_pd[ctrl_nucleoli]['centroid_x'].astype(int).tolist()
+    ctrl_y = nucleoli_pd[ctrl_nucleoli]['centroid_y'].astype(int).tolist()
+    ctrl_spots = ana.analysis_mask(ctrl_x, ctrl_y, pixels, num_dilation)
 
+    # get pixels_tseries and mean_intensity
     pixels_tseries = []
-    # measure mean intensity for bleach spots and control spots
     bleach_spots_int_tseries = [[] for _ in range(obj.object_count(bleach_spots))]
     ctrl_spots_int_tseries = [[] for _ in range(obj.object_count(ctrl_spots))]
     for t in range(0, max_t):
         img = store.get_image(cb.t(t).build())
         pixels = np.reshape(img.get_raw_pixels(), newshape=[img.get_height(), img.get_width()])
         pixels_tseries.append(pixels)
-
-        bleach_spots_pix = regionprops(label(bleach_spots, connectivity=1), pixels)
-        ctrl_spots_pix = regionprops(label(ctrl_spots, connectivity=1), pixels)
-        for i in range(len(bleach_spots_pix)):
-            bleach_spots_int_tseries[i].append(bleach_spots_pix[i].mean_intensity)
-        for i in range(len(ctrl_spots_pix)):
-            ctrl_spots_int_tseries[i].append(ctrl_spots_pix[i].mean_intensity)
+        # measure mean intensity for bleach spots and control spots
+        bleach_spots_props = regionprops(label(bleach_spots, connectivity=1), pixels)
+        ctrl_spots_props = regionprops(label(ctrl_spots, connectivity=1), pixels)
+        for i in range(len(bleach_spots_props)):
+            bleach_spots_int_tseries[i].append(bleach_spots_props[i].mean_intensity)
+        for i in range(len(ctrl_spots_props)):
+            ctrl_spots_int_tseries[i].append(ctrl_spots_props[i].mean_intensity)
     pointer_pd['raw_int'] = bleach_spots_int_tseries
 
     # background intensity measurement
@@ -150,18 +316,7 @@ def get_frap(pointer_pd, store, cb, bleach_spots, nucleoli_pd, log_pd, num_dilat
     return pointer_pd, ctrl_pd
 
 
-def get_bleach_frame(log_pd, store, cb):
-    log_pd.columns = ['time', 'aim_x', 'aim_y']
-    acquire_time_tseries, real_time = dat.get_time_tseries(store, cb)
-    bleach_frame_pointer_fl = []  # frame number of or right after photobleaching
-    for i in range(len(log_pd)):
-        # number of first frame after photobleaching (num_pre)
-        num_pre = dat.find_pos(log_pd['time'][i].split(' ')[1], acquire_time_tseries)
-        bleach_frame_pointer_fl.append(num_pre)
 
-    log_pd['bleach_frame'] = bleach_frame_pointer_fl
-
-    return log_pd
 
 
 def frap_analysis(pointer_pd, store, cb):
@@ -333,74 +488,7 @@ def frap_fitting_single_exp(pointer_pd):
     return pointer_pd
 
 
-def get_bleach_spots_coordinates(log_pd, store, cb, mode):
-    if mode == 'single-raw':
-        log_pd['x'] = log_pd['aim_x']
-        log_pd['y'] = log_pd['aim_y']
 
-    elif mode == 'single-offset':
-        x_lst = []
-        y_lst = []
-        for i in range(len(log_pd)):
-            aim_x = log_pd['aim_x'][i]
-            aim_y = log_pd['aim_y'][i]
-            bleach_frame = int(log_pd['bleach_frame'][i])
-
-            post = store.get_image(cb.p(0).z(0).c(0).t(bleach_frame+4).build())
-            pix_post = np.reshape(post.get_raw_pixels(), newshape=[post.get_height(), post.get_width()])
-            pre = store.get_image(cb.p(0).z(0).c(0).t(bleach_frame).build())
-            pix_pre = np.reshape(pre.get_raw_pixels(), newshape=[pre.get_height(), pre.get_width()])
-            pix = pix_post - pix_pre + 100
-
-            otsu_val = threshold_otsu(pix)
-            otsu = pix > otsu_val
-            bleach = binary_erosion(otsu)
-            bleach = binary_erosion(bleach)
-            bleach = binary_dilation(bleach)
-            bleach = binary_dilation(bleach)
-
-            # tried to use local maxima to find bleach spots, not good
-            """if mode == 'local_maxima':
-                label_bleach = label(bleach)
-                for m in range(np.amax(label_bleach)):
-                    mask = np.zeros_like(pix)
-                    mask[label_bleach == m+1] = 1
-                    bleach_pix = pix.copy()
-                    bleach_pix[mask == 0] = 0
-                    peaks = peak_local_max(bleach_pix, min_distance=20)
-                    if len(peaks) > 0:
-                        for n in peaks:
-                            peak_x.append(n[1])
-                            peak_y.append(n[0])"""
-
-            # use centroid to find bleach spots
-            # local maxima is largely affected by intensity from other cellular feature
-            bleach_prop = regionprops(label(bleach))
-            peak_x = [round(p.centroid[1]) for p in bleach_prop]
-            peak_y = [round(p.centroid[0]) for p in bleach_prop]
-
-            if len(peak_x) == 1:
-                x_lst.append(peak_x[0])
-                y_lst.append(peak_y[0])
-            elif len(peak_x) > 1:
-                x_closest, y_closest = dat.find_closest(aim_x, aim_y, peak_x, peak_y)
-                x_lst.append(x_closest)
-                y_lst.append(y_closest)
-            else:
-                x_lst.append(0)
-                y_lst.append(0)
-
-        log_pd['bleach_x'] = x_lst
-        log_pd['bleach_y'] = y_lst
-        log_pd['x_diff'] = log_pd['bleach_x'] - log_pd['aim_x']
-        log_pd['y_diff'] = log_pd['aim_y'] - log_pd['bleach_y']
-
-        log_pd['x'] = log_pd['bleach_x']
-        log_pd['y'] = log_pd['bleach_y']
-        log_pd.loc[log_pd.x == 0, 'x'] = log_pd[log_pd['x'] == 0]['aim_x']
-        log_pd.loc[log_pd.y == 0, 'y'] = log_pd[log_pd['y'] == 0]['aim_y']
-
-    return log_pd
 
 
 def frap_filter(pointer_pd):
