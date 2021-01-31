@@ -51,10 +51,6 @@ pix_stitch
     FUNCTION: stitch same size images into a single image based on provided location (empty space 
               filled with same size black images)
     SYNTAX:   pix_stitch(pixels_pd: pd.DataFrame, num_col: int, num_row: int)
-
-get_time_tseries
-    FUNCTION: get acquisition time from uManager data
-    SYNTAX:   get_time_tseries(store, cb)
     
 """
 
@@ -407,35 +403,3 @@ def pix_stitch(pixels_pd: pd.DataFrame, num_col: int, num_row: int):
 
     return out
 
-
-def get_time_tseries(store, cb):
-    """
-    Get acquisition time from uManager data
-
-    Usage examples:
-    1) find bleach frame for FRAP analysis
-
-    :param store: store = mm.data().load_data(data_path, True)
-    :param cb: cb = mm.data().get_coords_builder()
-    :return: acquire_time_tseries: list
-                list of acquisition time display in 'hour:min:sec' format
-                e.g. ['17:30:38.360', '17:30:38.455', '17:30:38.536', '17:30:38.615', ...]
-             real_time_tseries: list
-                list of time in sec with first frame set as 0
-                e.g. [0.0, 0.09499999999999886, 0.17600000000000193, 0.25500000000000256, ...]
-
-    """
-    # get acquisition time
-    acquire_time_tseries = []
-
-    max_t = store.get_max_indices().get_t()
-    for t in range(0, max_t):
-        img = store.get_image(cb.t(t).build())
-        acq_time = img.get_metadata().get_received_time().split(' ')[1]
-        acquire_time_tseries.append(acq_time)
-
-    real_time_tseries = []
-    for i in range(max_t):
-        real_time_tseries.append(dat.get_time_length(0, i, acquire_time_tseries))
-
-    return acquire_time_tseries, real_time_tseries
