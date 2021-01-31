@@ -28,7 +28,7 @@ def get_bleach_spots(log_pd, label_nucleoli, nucleoli_pd, num_dilation=3):
     log_pd['nucleoli'] = obj.points_in_objects(label_nucleoli, log_pd['x'], log_pd['y'])
 
     # create analysis mask for all analysis points
-    bleach_spots = ana.analysis_mask(label_nucleoli, log_pd['y'], log_pd['x'], num_dilation)
+    bleach_spots = ana.analysis_mask(log_pd['y'], log_pd['x'], label_nucleoli, num_dilation)
     label_bleach_spots = label(bleach_spots, connectivity=1)
 
     # link pointer with corresponding bleach spots
@@ -54,7 +54,7 @@ def get_bleach_spots(log_pd, label_nucleoli, nucleoli_pd, num_dilation=3):
                                                         & (~log_pd['nucleoli'].isin(pointer_target_same_nucleoli))
                                                         & (log_pd['bleach_spots'].isin(pointer_same_analysis_spots))]))
 
-    bleach_spots_ft = ana.analysis_mask(label_nucleoli, pointer_ft_pd['y'], pointer_ft_pd['x'], num_dilation)
+    bleach_spots_ft = ana.analysis_mask(pointer_ft_pd['y'], pointer_ft_pd['x'], label_nucleoli, num_dilation)
     label_bleach_spots_ft = label(bleach_spots_ft, connectivity=1)
     # link pointer with corresponding filtered bleach spots
     pointer_ft_pd['bleach_spots'] = obj.points_in_objects(label_bleach_spots_ft, pointer_ft_pd['x'], pointer_ft_pd['y'])
@@ -90,7 +90,7 @@ def get_frap(pointer_pd, store, cb, bleach_spots, nucleoli_pd, log_pd, num_dilat
     ctrl_nucleoli = ~nucleoli_pd.index.isin(log_pd['nucleoli'].tolist())
     ctrl_centroids_x = nucleoli_pd[ctrl_nucleoli]['centroid_x'].astype(int).tolist()
     ctrl_centroids_y = nucleoli_pd[ctrl_nucleoli]['centroid_y'].astype(int).tolist()
-    ctrl_spots = ana.analysis_mask(pixels, ctrl_centroids_x, ctrl_centroids_y, num_dilation)
+    ctrl_spots = ana.analysis_mask(ctrl_centroids_x, ctrl_centroids_y, pixels, num_dilation)
 
     pixels_tseries = []
     # measure mean intensity for bleach spots and control spots
@@ -123,7 +123,7 @@ def get_frap(pointer_pd, store, cb, bleach_spots, nucleoli_pd, log_pd, num_dilat
         bg = pointer_pd['bg_linear_fit'][0]
     bleach_spots_int_cor = ana.bg_correction(bleach_spots_int_tseries, bg)
     ctrl_spots_int_cor = ana.bg_correction(ctrl_spots_int_tseries, bg)
-    pointer_pd = dat.add_object_measurements(pointer_pd, 'bg_cor_int', 'bleach_spots', bleach_spots_int_cor)
+    pointer_pd['bg_cor_int'] = bleach_spots_int_cor
     num_ctrl_spots = obj.object_count(ctrl_spots)
     ctrl_pd = pd.DataFrame({'ctrl_spots': np.arange(0, num_ctrl_spots, 1), 'raw_int': ctrl_spots_int_tseries,
                             'bg_cor_int': ctrl_spots_int_cor})
@@ -407,14 +407,18 @@ def get_bleach_spots_coordinates(log_pd, store, cb, mode):
 def frap_filter(pointer_pd):
     # filter frap curves
     # 1) number of pre_bleach frame < 5
-    # 2) does not find optional fit (single exponential)
-    # 3) mobile fraction < 0 or mobile fraction > 1.5
-    # 3) r2 of fit < 0.5
+    # 2) total imaging length < 150
+    # 3) does not find optional fit (single exponential)
+    # 4) mobile fraction < 0 or mobile fraction > 1.5
+    # 5) r2 of fit < 0.5
 
     frap_flt = []
     for i in range(len(pointer_pd)):
-        if (pointer_pd['bleach_frame'][i] < 5) | (np.isnan(pointer_pd['single_exp_a'][i])) \
-                | (pointer_pd['single_exp_a'][i] < 0) | (pointer_pd['single_exp_a'][i] >= 1.5) \
+        if (pointer_pd['bleach_frame'][i] < 5) \
+                | (pointer_pd['imaging_length'][i] < 150) \
+                | (np.isnan(pointer_pd['single_exp_a'][i])) \
+                | (pointer_pd['single_exp_a'][i] < 0) \
+                | (pointer_pd['single_exp_a'][i] >= 1.5) \
                 | (pointer_pd['single_exp_r2'][i] < 0.5):
             frap_flt.append(0)
         else:
@@ -422,15 +426,19 @@ def frap_filter(pointer_pd):
     pointer_pd['frap_filter'] = frap_flt
     print("%d FRAP curves: less than 5 frames before photobleaching."
           % len(pointer_pd[pointer_pd['bleach_frame'] < 5]))
+    print("%d FRAP curves: less than 150 frames in total."
+          % len(pointer_pd[(pointer_pd['bleach_frame'] >= 5) & (pointer_pd['imaging_length'] < 150)]))
     print("%d FRAP curves: no optimal single exponential fit."
-          % len(pointer_pd[(pointer_pd['bleach_frame'] >= 5) & (np.isnan(pointer_pd['single_exp_a']))]))
+          % len(pointer_pd[(pointer_pd['bleach_frame'] >= 5) & (pointer_pd['imaging_length'] >= 150)
+                           & (np.isnan(pointer_pd['single_exp_a']))]))
     print("%d FRAP curves: mobile fraction < 0 or >= 1.5."
-          % len(pointer_pd[(pointer_pd['bleach_frame'] >= 5) & (~np.isnan(pointer_pd['single_exp_a']))
-                & ((pointer_pd['single_exp_a'] < 0) | (pointer_pd['single_exp_a'] >= 1.5))]))
+          % len(pointer_pd[(pointer_pd['bleach_frame'] >= 5) & (pointer_pd['imaging_length'] >= 150)
+                           & (~np.isnan(pointer_pd['single_exp_a']))
+                           & ((pointer_pd['single_exp_a'] < 0) | (pointer_pd['single_exp_a'] >= 1.5))]))
     print("%d FRAP curves: r square of single exponential fit < 0.5"
-          % len(pointer_pd[(pointer_pd['bleach_frame'] >= 5) & (~np.isnan(pointer_pd['single_exp_a']))
-                & (pointer_pd['single_exp_a'] > 0) & (pointer_pd['single_exp_a'] < 1.5)
-                           & (pointer_pd['single_exp_r2'] < 0.5)]))
+          % len(pointer_pd[(pointer_pd['bleach_frame'] >= 5) & (pointer_pd['imaging_length'] >= 150)
+                           & (~np.isnan(pointer_pd['single_exp_a'])) & (pointer_pd['single_exp_a'] > 0)
+                           & (pointer_pd['single_exp_a'] < 1.5) & (pointer_pd['single_exp_r2'] < 0.5)]))
 
     return pointer_pd
 
