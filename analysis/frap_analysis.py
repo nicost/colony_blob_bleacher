@@ -163,7 +163,7 @@ dis.plot_raw_intensity(pointer_pd, ctrl_pd, storage_path)  # raw intensity
 dis.plot_pb_factor(pointer_pd, storage_path)  # photobleaching factor
 dis.plot_corrected_intensity(pointer_pd, storage_path)  # intensity after dual correction
 dis.plot_normalized_frap(pointer_pd, storage_path)  # normalized FRAP curves
-dis.plot_fitting(pointer_pd, storage_path)  # normalized FRAP curves after filtering with fitting
+dis.plot_frap_fitting(pointer_pd, storage_path)  # normalized FRAP curves after filtering with fitting
                                             # individual normalized FRAP curves with fitting
 
 # --------------------------
