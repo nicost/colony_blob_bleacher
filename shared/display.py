@@ -273,3 +273,24 @@ def plot_fitting(pointer_pd, storage_path):
             plt.xlabel('time (s)')
             plt.ylabel('normalized intensity (AU)')
             plt.savefig('%s/frap_curves_filtered_%d.pdf' % (storage_path, i))
+
+
+def napari_movie(store, cb):
+    """
+    Transform uManager movie for napari display
+
+    :param store: store = mm.data().load_data(data_path, True)
+    :param cb: cb = mm.data().get_coords_builder()
+    :return: mov: movie used for napari display
+
+    """
+    # create stack for time series
+    pixels_tseries = []
+    max_t = store.get_max_indices().get_t()
+    for t in range(0, max_t):
+        img = store.get_image(cb.t(t).build())
+        pixels = np.reshape(img.get_raw_pixels(), newshape=[img.get_height(), img.get_width()])
+        pixels_tseries.append(pixels)
+    mov = np.stack(pixels_tseries, axis=0)
+
+    return mov
