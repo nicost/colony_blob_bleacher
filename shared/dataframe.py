@@ -7,12 +7,21 @@ import pandas as pd
 
 pd.DataFrame related:
 
-    add columns
+    add_columns
         FUNCTION: add multiple columns to an existed pd.DataFrame
         SYNTAX:   add_columns(dataframe: pd.DataFrame, name_lst: list, value_lst: list)
-
-List related:
     
+    pd_numeric
+        FUNCTION: numeric certain columns within a pd.DataFrame
+        SYNTAX:   pd_numeric(dataframe: pd.DataFrame, column_lst: list)
+    
+    copy_based_on_index
+        FUNCTION: copy data from dataframe2 to dataframe1 based on common index
+        SYNTAX:   copy_based_on_index(dataframe1: pd.DataFrame, dataframe2: pd.DataFrame,
+                  index_name1: str, index_name2: str, column_lst1: list, column_lst2: list)
+                  
+List related:
+
     find_pos
         FUNCTION: find the position of the first value in linearly increased list that is larger 
                   than or equal to the given value
@@ -69,6 +78,61 @@ def add_columns(dataframe: pd.DataFrame, name_lst: list, value_lst: list):
         dataframe[name_lst[i]] = value_lst[i]
 
     return dataframe
+
+
+def pd_numeric(dataframe: pd.DataFrame, column_lst: list):
+    """
+    Numeric certain columns within a pd.DataFrame
+
+    :param dataframe: pd.DataFrame
+    :param column_lst: name of columns that need to be numeric
+    :return: dataframe: numeric pd.DataFrame
+
+    """
+    for x in column_lst:
+        dataframe[x] = pd.to_numeric(dataframe[x], errors='coerce')
+
+    return dataframe
+
+
+def copy_based_on_index(dataframe1: pd.DataFrame, dataframe2: pd.DataFrame,
+                        index_name1: str, index_name2: str,
+                        column_lst1: list, column_lst2: list):
+    """
+    Copy data from dataframe2 to dataframe1 based on common index
+
+    :param dataframe1: pd.DataFrame
+                dataframe that receives information
+    :param dataframe2: pd.DataFrame
+                dataframe that provides information
+    :param index_name1: str
+                common index column name in dataframe1
+    :param index_name2: str
+                common index column name in dataframe2
+    :param column_lst1: list
+                list of column names assigned to dataframe1 when add new columns that copy
+                from dataframe2, len(column_lst1) = len(column_lst2)
+    :param column_lst2: list
+                list of column names in dataframe2 that ready for copy, , len(column_lst1)
+                = len(column_lst2)
+    :return: dataframe1: pd.DataFrame, dataframe1 with new columns added
+
+    """
+
+    value_lst = [[] for _ in range(len(column_lst1))]
+
+    for i in dataframe1[index_name1]:
+        target = dataframe2[dataframe2[index_name2] == i].iloc[0]
+        for j in range(len(column_lst1)):
+            value_lst[j].append(target[column_lst2[j]])
+    dataframe1 = add_columns(dataframe1, column_lst1, value_lst)
+
+    return dataframe1
+
+
+# replace values in some rows with other values in a dataframe
+# log_pd.loc[log_pd.x == 0, 'x'] = log_pd[log_pd['x'] == 0]['aim_x']
+# log_pd.loc[log_pd.y == 0, 'y'] = log_pd[log_pd['y'] == 0]['aim_y']
 
 # ---------------------------------------------------------------------------------------------------
 # FUNCTIONS for LIST
@@ -228,6 +292,7 @@ def get_grid_pos(pos: int, num_grid: int):
         col = pos-row*num_grid
     else:
         col = num_grid-1-(pos-row*num_grid)
+
     return row, col
 
 
