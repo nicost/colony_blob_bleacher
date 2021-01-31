@@ -3,7 +3,6 @@ from skimage import segmentation
 from skimage.filters import sobel
 from skimage.morphology import extrema, binary_dilation, binary_erosion
 from skimage.filters import threshold_otsu, threshold_yen, threshold_local
-
 import shared.objects as obj
 from shared.objects import remove_large
 
