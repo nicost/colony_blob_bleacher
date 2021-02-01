@@ -2,14 +2,15 @@ import numpy as np
 import random
 import time
 from pycromanager import Bridge
-from skimage.filters import threshold_otsu
 from skimage.measure import label, regionprops
 from skimage import morphology
 
 from shared.analysis import central_pixel_without_cells, bleach_location
-from shared.find_blobs import find_blobs, select
+from shared.find_blobs import select
 
 # variables
+from shared.find_organelles import find_organelle
+
 nr = 40
 nr_between_projector_checks = 2
 
@@ -23,7 +24,7 @@ projector_device = projector.get_projection_device()
 
 def snap_and_get_bleach_location(exposure, cutoff):
     p_exposure = projector_device.get_exposure()
-    c_exposure = mmc.get_exposure();
+    c_exposure = mmc.get_exposure()
     test_img = mm.live().snap(True).get(0)
     test_np_img = np.reshape(test_img.get_raw_pixels(), newshape=[test_img.get_height(), test_img.get_width()])
     location = central_pixel_without_cells(test_np_img)
@@ -73,7 +74,7 @@ for idx in range(pos_list.get_number_of_positions()):
     img = mm.live().snap(False).get(0)
     pixels = np.reshape(img.get_raw_pixels(), newshape=[img.get_height(), img.get_width()])
     # find organelles using a combination of thresholding and watershed
-    segmented = find_blobs(pixels, threshold_otsu(pixels), 500, 200)
+    segmented = find_organelle(pixels, 'local-nucleoli', 500, 200, 10, 1000)
     label_img = label(segmented)
     label_img = morphology.remove_small_objects(label_img, 5)
     blobs = regionprops(label_img)
@@ -87,7 +88,7 @@ for idx in range(pos_list.get_number_of_positions()):
         # Trick to get timing right.  Wait for Core to report that Sequence is running
         while not mmc.is_sequence_running(mmc.get_camera_device()):
             time.sleep(0.1)
-        time.sleep(0.5)
+        time.sleep(1.5)
 
         for region_list in [centered]:
             nr_shots = nr if len(region_list) >= (2 * nr) else int(len(region_list) / 2)
