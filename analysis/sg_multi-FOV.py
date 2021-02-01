@@ -22,9 +22,9 @@ SEGMENTS and ANALYZES
     SG properties (enables size, mean intensity, circularity and eccentricity) for all positions with 
     the same time/channel/z-plane, 
 EXPORTS 
-    measurements (including position in uManager data, SG number, x, y position, size, mean intensity,
-    circularity and eccentricity) in .txt format and stitched images (raw image, SG mask, color coded
-    mean intensity/circularity/eccentricity data) in .pdf format, 
+    measurements (including position in uManager data, SG number, x, y position, size, mean intensity 
+    (without correction), circularity and eccentricity) in .txt format and stitched images (raw image, 
+    SG mask, color coded mean intensity/circularity/eccentricity data) in .pdf format, 
 DISPLAYS 
     stitched images (raw image, SG mask, color coded mean_intensity/circularity/eccentricity data) in 
     napari. 
