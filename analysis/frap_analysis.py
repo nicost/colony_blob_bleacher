@@ -9,13 +9,14 @@ else:
     from matplotlib.backends.backend_qt4agg import FigureCanvas
 from matplotlib.figure import Figure
 from vispy.color import Colormap
-from skimage.measure import label, regionprops
+from skimage.measure import label
 from shared.find_organelles import find_organelle, nucleoli_analysis, find_nuclear, nuclear_analysis
 import shared.analysis as ana
 import shared.dataframe as dat
 import shared.display as dis
 import shared.objects as obj
 import shared.bleach_points as ble
+import shared.math_functions as mat
 import os
 
 # --------------------------
@@ -60,10 +61,11 @@ cb = mm.data().get_coords_builder()
 cb.t(0).p(0).c(0).z(0)
 # get max_t and acquisition time
 max_t = store.get_max_indices().get_t()
+pixels_tseries = dat.get_pixels_tseries(store, cb, data_c)
 acquire_time_tseries, real_time = dat.get_time_tseries(store, cb)
 
 # --------------------------------------
-# IMAGE ANALYSIS based on time 0
+# ORGANELLE ANALYSIS based on time 0
 # --------------------------------------
 print("### Image analysis: nucleoli detection based on time 0 ...")
 
@@ -102,39 +104,95 @@ print("### Image analysis: bleach spots detection ...")
 log_pd = pd.read_csv('%s/PointAndShoot.log' % data_path, na_values=['.'], sep='\t', header=None)
 data_log['num_aim_spots'] = [len(log_pd)]
 print("Aim to photobleach %d spots." % data_log['num_aim_spots'][0])
-
-# rename columns
-log_pd.columns = ['time', 'aim_x', 'aim_y']
+log_pd.columns = ['time', 'aim_x', 'aim_y']  # reformat log_pd
 
 # get bleach_frame
-log_pd['bleach_frame'] = ble.get_bleach_frame(log_pd, acquire_time_tseries)
+log_pd['bleach_frame'] = dat.get_frame(log_pd['time'], acquire_time_tseries)
 
 # get bleach spot coordinate
 coordinate_pd = ble.get_bleach_spots_coordinates(log_pd, store, cb, data_c, mode_bleach_detection)
 log_pd = pd.concat([log_pd, coordinate_pd], axis=1)
 
-# generate bleach spot mask
+# link pointer with corresponding nucleoli
+log_pd['nucleoli'] = obj.points_in_objects(label_nucleoli, log_pd['x'], log_pd['y'])
+
+# generate bleach spot mask and bleach spots dataframe (pointer_pd)
 bleach_spots, pointer_pd = ble.get_bleach_spots(log_pd, label_nucleoli, num_dilation)
 data_log['num_bleach_spots'] = [obj.object_count(bleach_spots)]
 print("%d spots passed filters for analysis." % data_log['num_bleach_spots'][0])
 
-# add bleach spots corresponding nucleoli features
+# add bleach spots corresponding nucleoli measurements
 pointer_pd = dat.copy_based_on_index(pointer_pd, nucleoli_pd, 'nucleoli', 'nucleoli',
-                                    ['nucleoli_x', 'nucleoli_y', 'nucleoli_size',
-                                     'nucleoli_mean_int', 'nucleoli_circ'],
-                                    ['centroid_x', 'centroid_y', 'size', 'mean_int', 'circ'])
+                                     ['nucleoli_x', 'nucleoli_y', 'nucleoli_size',
+                                      'nucleoli_mean_int', 'nucleoli_circ'],
+                                     ['centroid_x', 'centroid_y', 'size', 'mean_int', 'circ'])
 
 # --------------------------------------------------
 # FRAP CURVE ANALYSIS from bleach spots
 # --------------------------------------------------
 print("### Image analysis: FRAP curve calculation ...")
 
-# generate frap curve double corrected intensity ('mean_int') and added into pointer_pd
-pointer_pd, ctrl_pd = ble.get_frap(pointer_pd, store, cb, bleach_spots, nucleoli_pd, log_pd, num_dilation)
+# create control spots mask
+ctrl_nucleoli = ~nucleoli_pd.index.isin(log_pd['nucleoli'].tolist())
+ctrl_x = nucleoli_pd[ctrl_nucleoli]['centroid_x'].astype(int).tolist()
+ctrl_y = nucleoli_pd[ctrl_nucleoli]['centroid_y'].astype(int).tolist()
+ctrl_spots = ana.analysis_mask(ctrl_x, ctrl_y, pix, num_dilation)
+num_ctrl_spots = obj.object_count(ctrl_spots)
+pointer_pd['num_ctrl_spots'] = [num_ctrl_spots] * len(pointer_pd)
+
+# get raw intensities for bleach spots and control spots
+pointer_pd['raw_int'] = ana.get_intensity(bleach_spots, pixels_tseries)
+ctrl_spots_int_tseries = ana.get_intensity(ctrl_spots, pixels_tseries)
+ctrl_pd = pd.DataFrame({'ctrl_spots': np.arange(0, num_ctrl_spots, 1), 'raw_int': ctrl_spots_int_tseries})
+
+# background intensity measurement
+bg_int_tseries = ana.get_bg_int(pixels_tseries)
+pointer_pd['bg_int'] = [bg_int_tseries] * len(pointer_pd)
+
+# background intensity fitting
+bg_fit = mat.bg_fitting_linear(bg_int_tseries)
+pointer_pd = dat.add_columns(pointer_pd, ['bg_linear_fit', 'bg_linear_r2', 'bg_linear_a', 'bg_linear_b'],
+                             [[bg_fit[0]] * len(pointer_pd), [bg_fit[1]] * len(pointer_pd),
+                              [bg_fit[2]] * len(pointer_pd), [bg_fit[3]] * len(pointer_pd)])
+
+# background correction
+# use original measurement if fitting does not exist
+if np.isnan(bg_fit[2]):
+    bg = bg_int_tseries
+else:
+    bg = bg_fit[0]
+pointer_pd['bg_cor_int'] = ana.bg_correction(pointer_pd['raw_int'], bg)
+ctrl_pd['bg_cor_int'] = ana.bg_correction(ctrl_pd['raw_int'], bg)
+
+# photobleaching factor calculation
+if num_ctrl_spots != 0:
+    # calculate photobleaching factor
+    pb_factor = ana.get_pb_factor(ctrl_pd['bg_cor_int'])
+    pointer_pd['pb_factor'] = [pb_factor] * len(pointer_pd)
+    print("%d ctrl points are used to correct photobleaching." % len(ctrl_pd))
+
+    # pb_factor fitting with single exponential decay
+    pb_fit = mat.pb_factor_fitting_single_exp(pb_factor)
+    pointer_pd = dat.add_columns(pointer_pd, ['pb_single_exp_decay_fit', 'pb_single_exp_decay_r2',
+                                              'pb_single_exp_decay_a', 'pb_single_exp_decay_b'],
+                                 [[pb_fit[0]] * len(pointer_pd), [pb_fit[1]] * len(pointer_pd),
+                                  [pb_fit[2]] * len(pointer_pd), [pb_fit[3]] * len(pointer_pd)])
+
+    # photobleaching correction
+    if np.isnan(pb_fit[2]):
+        pb = pb_factor
+    else:
+        pb = pb_fit[0]
+    pointer_pd['mean_int'] = ana.pb_correction(pointer_pd['bg_cor_int'], pb)
+
 # normalize frap curve and measure mobile fraction and t-half based on curve itself
-pointer_pd = ble.frap_analysis(pointer_pd, store, cb)
+frap_pd = ble.frap_analysis(pointer_pd, max_t, acquire_time_tseries, real_time)
+pointer_pd = pd.concat([pointer_pd, frap_pd], axis=1)
+
 # curve fitting with single exponential function
-pointer_pd = ble.frap_fitting_single_exp(pointer_pd)
+frap_fit_pd = mat.frap_fitting_single_exp(pointer_pd['real_time_post'], pointer_pd['int_curve_post_nor'])
+pointer_pd = pd.concat([pointer_pd, frap_fit_pd], axis=1)
+
 # filter frap curves
 pointer_pd = ble.frap_filter(pointer_pd)
 pointer_ft_pd = pointer_pd[pointer_pd['frap_filter'] == 1]
@@ -178,8 +236,7 @@ pointer_out = pd.DataFrame({'bleach_spots': pointer_ft_pd['bleach_spots'],
 pointer_out.to_csv('%s/data.txt' % storage_path, index=False, sep='\t')
 
 # images
-if mode_bleach_detection == 'single-offset':
-    dis.plot_offset_map(pointer_pd, storage_path)  # offset map
+dis.plot_offset_map(pointer_pd, storage_path)  # offset map
 dis.plot_raw_intensity(pointer_pd, ctrl_pd, storage_path)  # raw intensity
 dis.plot_pb_factor(pointer_pd, storage_path)  # photobleaching factor
 dis.plot_corrected_intensity(pointer_pd, storage_path)  # intensity after dual correction
