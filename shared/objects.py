@@ -1,14 +1,57 @@
-# ---------------------------------------------
-# FUNCTIONS for 0-AND-1 NP.ARRAY (BINARY IMAGE)
-# ---------------------------------------------
-
 import numpy as np
 import shared.warning as warn
-from skimage.morphology import remove_small_objects, medial_axis, extrema, binary_dilation, erosion, dilation
+from skimage.morphology import remove_small_objects, medial_axis, extrema, binary_dilation
 from skimage.measure import label, regionprops
 from skimage.filters import sobel
 from skimage import segmentation
 import math
+
+"""
+# ---------------------------------------------------------------------------------------------------
+# FUNCTIONS for 0-AND-1 NP.ARRAY (BINARY IMAGE)
+# ---------------------------------------------------------------------------------------------------
+
+remove_small
+    FUNCTION: remove objects smaller than the specified size
+    SYNTAX:   remove_small(obj: np.array, min_size=10)
+
+remove_large
+    FUNCTION: remove objects larger than the specified size
+    SYNTAX:   remove_large(obj: np.array, max_size=1000)
+
+obj_display_in_eccentricity
+    FUNCTION: generate color image based on eccentricity value
+    SYNTAX:   obj_display_in_eccentricity(label_obj: np.array)
+
+obj_display_in_circularity
+    FUNCTION: generate color image based on circularity value
+    SYNTAX:   obj_display_in_circularity(label_obj: np.array)
+
+obj_display_in_intensity
+    FUNCTION: generate color image based on intensity value
+    SYNTAX:   obj_display_in_intensity(label_obj: np.array, pixels: np.array, int_range)
+
+points_in_objects
+    FUNCTION: correlate points with objects' labeled numbers from label(obj)
+    SYNTAX:   points_in_objects(label_obj: np.array, points_x: list, points_y: list)
+
+object_count
+    FUNCTION: count the number of objects in given image
+    SYNTAX:   object_count(obj: np.array)
+
+label_watershed
+    FUNCTION: separate touching objects based on distance map (similar to imageJ watershed)
+    SYNTAX:   label_watershed(obj: np.array)
+
+label_remove_small
+    FUNCTION: remove objects smaller than the specified size from labeled image
+    SYNTAX:   label_remove_small(label_obj: np.array, min_size: int)
+
+label_resort
+    FUNCTION: re-label random labeled image into sequential labeled image
+    SYNTAX:   label_resort(label_obj: np.array)
+
+"""
 
 
 def remove_small(obj: np.array, min_size=10):
@@ -22,6 +65,7 @@ def remove_small(obj: np.array, min_size=10):
     :param min_size: int, optional (default: 10)
                 The smallest allowable object size.
     :return: out: nd.array, 0-and-1, same shape and type as input obj
+
     """
     # Raise type error if not int
     warn.check_img_supported(obj)
@@ -36,16 +80,16 @@ def remove_small(obj: np.array, min_size=10):
 
 def remove_large(obj: np.array, max_size=1000):
     """
-        Remove objects larger than the specified size.
+    Remove objects larger than the specified size.
 
-        Expects ar to be an integer image array with labeled objects, and removes objects
-        larger than max_size.
+    Expects ar to be an integer image array with labeled objects, and removes objects
+    larger than max_size.
 
-        :param obj: np.array, 0-and-1
-        :param max_size: int, optional (default: 1000)
-                    The largest allowable object size.
-        :return: out: np.array, 0-and-1, same shape and type as input obj
-        """
+    :param obj: np.array, 0-and-1
+    :param max_size: int, optional (default: 1000)
+                The largest allowable object size.
+    :return: out: np.array, 0-and-1, same shape and type as input obj
+    """
     # Raise type error if not int
     warn.check_img_supported(obj)
 
@@ -57,16 +101,16 @@ def remove_large(obj: np.array, max_size=1000):
     return out
 
 
-def obj_display_in_eccentricity(obj: np.array):
+def obj_display_in_eccentricity(label_obj: np.array):
     """
     generate color image based on eccentricity value
 
-    :param obj: np.array, 0-and-1
+    :param label_obj: np.array, grey scale labeled image
     :return: out: np.array, 0 - 255 int8 format, same shape and type as input obj
+
     """
-    label_obj = label(obj, connectivity=1)
     obj_prop = regionprops(label_obj)
-    out = np.zeros_like(obj, dtype=float)
+    out = np.zeros_like(label_obj, dtype=float)
     for i in obj_prop:
         ecce = i.eccentricity
         # convert values to 0 - 255 int8 format with (0,1.0) as color dynamic range
@@ -81,16 +125,16 @@ def obj_display_in_eccentricity(obj: np.array):
     return out
 
 
-def obj_display_in_circularity(obj: np.array):
+def obj_display_in_circularity(label_obj: np.array):
     """
     generate color image based on circularity value
 
-    :param obj: np.array, 0-and-1
+    :param label_obj: np.array, grey scale labeled image
     :return: out: np.array, 0 - 255 int8 format, same shape and type as input obj
+
     """
-    label_obj = label(obj, connectivity=1)
     obj_prop = regionprops(label_obj)
-    out = np.zeros_like(obj, dtype=float)
+    out = np.zeros_like(label_obj, dtype=float)
     for i in obj_prop:
         # convert values to 0 - 255 int8 format with (0,1.0) as color dynamic range
         if i.area >= 50:  # only calculate for area>50 organelle
@@ -106,18 +150,18 @@ def obj_display_in_circularity(obj: np.array):
     return out
 
 
-def obj_display_in_intensity(obj: np.array, pixels: np.array, int_range):
+def obj_display_in_intensity(label_obj: np.array, pixels: np.array, int_range):
     """
     generate color image based on intensity value
 
-    :param obj: np.array, 0-and-1
+    :param label_obj: np.array, grey scale labeled image
     :param pixels: np.array, corresponding grey scale image
     :param int_range: intensity range
     :return: out: np.array, 0 - 255 int8 format, same shape and type as input obj
+
     """
-    label_obj = label(obj, connectivity=1)
     obj_prop = regionprops(label_obj, pixels)
-    out = np.zeros_like(obj, dtype=float)
+    out = np.zeros_like(label_obj, dtype=float)
     for i in obj_prop:
         mean_int = np.log(i.mean_intensity)
         # convert values to 0 - 255 int8 format with (0,1.0) as color dynamic range
@@ -190,7 +234,15 @@ def label_watershed(obj: np.array):
     return label_obj
 
 
-def label_remove_small(label_obj: np.array, min_size):
+def label_remove_small(label_obj: np.array, min_size: int):
+    """
+    Remove objects smaller than the specified size from labeled image
+
+    :param label_obj: np.array, grey scale labeled image
+    :param min_size: int
+                The smallest allowable object size
+    :return: out: np.array, grey scale labeled image with small objects removed
+    """
     out = np.zeros_like(label_obj)
     obj_prop = regionprops(label_obj)
     for i in range(len(obj_prop)):
@@ -201,6 +253,12 @@ def label_remove_small(label_obj: np.array, min_size):
 
 
 def label_resort(label_obj: np.array):
+    """
+    Re-label random labeled image into sequential labeled image.
+
+    :param label_obj: np.array, grey scale labeled image
+    :return: label_out: np.array, sorted grey scale labeled image
+    """
     count = 1
     label_out = np.zeros_like(label_obj)
     for i in range(np.amax(label_obj)):
