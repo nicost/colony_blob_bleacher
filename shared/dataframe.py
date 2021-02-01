@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 
 """
 # ---------------------------------------------------------------------------------------------------
@@ -46,13 +47,21 @@ uManager related:
         FUNCTION: calculate time between two frames (unit: second)
         SYNTAX:   get_time_length(start_frame: int, end_frame: int, time_tseries: list)
     
+    get_frame
+        FUNCTION: get action frame number based on metadata provided time
+        SYNTAX:   get_frame(time_lst: list, acquire_time_tseries: list)
+    
+    get_pixels_tseries
+        FUNCTION: get pixels time series
+        SYNTAX:   get_pixels_tseries(store, cb, data_c: int)
+        
 Number related:
 
     get_grid_pos
         FUNCTION: transform sequential positions into column/row positions in a grid (n x n snake 
                   manner)
         SYNTAX:   get_grid_pos(pos: int, num_grid: int)
-    
+          
     find_closest
         FUNCTION: find closest spot
         SYNTAX:   find_closest(aim_x: int or float, aim_y: int or float, x_list: list, y_list: list)
@@ -266,6 +275,52 @@ def get_time_length(start_frame: int, end_frame: int, time_tseries: list):
     out = 3600*(t_end[0]-t_start[0]) + 60*(t_end[1]-t_start[1]) + (t_end[2]-t_start[2])
 
     return out
+
+
+def get_frame(time_lst: list, acquire_time_tseries: list):
+    """
+    Get action frame number based on metadata provided time
+
+    Usage examples:
+    1) get bleach frame for FRAP analysis
+
+    :param time_lst: list
+                list of action time displayed in metadata format
+    :param acquire_time_tseries: list
+                list of acquisition time displayed in 'hour:min:sec' format
+                e.g. ['17:30:38.360', '17:30:38.455', '17:30:38.536', '17:30:38.615', ...]
+    :return: frame_lst: list, list of action frames
+
+    """
+    frame_lst = []  # frame number of or right after photobleaching
+    for i in range(len(time_lst)):
+        # number of first frame after photobleaching (num_pre)
+        num_pre = find_pos(time_lst[i].split(' ')[1], acquire_time_tseries)
+        frame_lst.append(num_pre)
+
+    return frame_lst
+
+
+def get_pixels_tseries(store, cb, data_c: int):
+    """
+    Get pixels time series
+
+    :param store: store = mm.data().load_data(data_path, True)
+    :param cb: cb = mm.data().get_coords_builder()
+    :param data_c: channel to be analyzed
+    :return: pixels_tseries: list, pixels time series
+                e.g. [pixels_t0, pixels_t1, pixels_t2, ...]
+
+    """
+    max_t = store.get_max_indices().get_t()
+    pixels_tseries = []
+    for t in range(0, max_t):
+        img = store.get_image(cb.z(0).p(0).c(data_c).t(t).build())
+        pixels = np.reshape(img.get_raw_pixels(), newshape=[img.get_height(), img.get_width()])
+        pixels_tseries.append(pixels)
+
+    return pixels_tseries
+
 
 # ---------------------------------------------------------------------------------------------------
 # FUNCTIONS for NUMBER
