@@ -52,6 +52,8 @@ def find_organelle(pixels: np.array, global_thresholding='na', extreme_val=500, 
                 optional (default: 'na')
                 Whether or not ('na') to apply global thresholding method and
                 which method to apply
+                nucleoli default: 'local-nucleoli'
+                SG default: 'local-sg'
     :param extreme_val: int, optional (default: 500)
                 Used in shared.find_blobs.segment_watershed to find local maxima
     :param bg_val: int, optional (default: 200)
@@ -59,8 +61,12 @@ def find_organelle(pixels: np.array, global_thresholding='na', extreme_val=500, 
                 for watershed
     :param min_size: int, optional (default: 5)
                 The smallest allowable organelle size.
+                nucleoli default: 10
+                SG default: 5
     :param max_size: int, optional (default: 1000)
                 The largest allowable organelle size.
+                nucleoli default: 1000
+                SG default: 350
     :returns nucleoli_filtered: 0-and-1 np.array, same shape and type as input img
                 Binary array with found nucleoli labeled with 1.
     """
