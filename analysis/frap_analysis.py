@@ -19,6 +19,68 @@ import shared.bleach_points as ble
 import shared.math_functions as mat
 import os
 
+"""
+# ---------------------------------------------------------------------------------------------------
+# FRAP ANALYSIS for NUCLEOLI (SINGLE-FOV)
+# ---------------------------------------------------------------------------------------------------
+
+EXPECTS 
+    an uManager data (single z, single p),
+SEGMENTS and ANALYZES
+    nuclear properties (enables x, y position and number of nucleoli), nucleoli properties (enables 
+    x, y position, size, mean intensity (without correction), circularity, eccentricity and 
+    corresponding nuclear index,
+DETECTS and ANALYZES
+    bleach spots to measure FRAP curves. Intensities were background and photobleaching corrected and
+    normalized based on pre-bleach intensity and minimum intensity, curves were then fitted with 
+    single exponential function and mobile fraction and t-half were calculated based on fitting,
+EXPORTS 
+    data.txt: simplified bleach spots related information
+    data_full.txt: full bleach spots related information
+    data_log.txt: some information during analysis
+    data_nuclear.txt: nuclear relevant information
+    data_nucleoli.txt: nucleoli relevant information
+    data_ctrl.txt: control spots relevant information
+    offset_map.pdf: offset map, aim spots (coordinates get from .log file) are centered to (0,0), 
+        non (0,0) end of the lines indicate location of detected bleach spots relative to aim spots
+    raw_intensity.pdf: raw intensity curves of bleach spots, control spots and background and 
+        background linear fit curve
+    pb_factor.pdf: photobleach factor curve and its single exponential decay fit curve
+    double_corrected_intensity.pdf: double corrected intensity curves of bleach spots
+    normalized_frap_curves.pdf: normalized FRAP curves
+    normalized_frap_curves_filtered.pdf: normalized FRAP curves after filtering and their 
+        corresponding single exponential fitting curves
+    frap_curves_filtered_NUMBER.pdf: each single normalized FRAP curve and its corresponding single 
+        exponential fitting curve
+DISPLAYS 
+    images (raw image, nuclear, nucleoli, aim spots, color coded bleach spots) in napari, images 
+    (double corrected intensity curves, normalized filtered FRAP curves and their fitting curves, 
+    offset map) in matplotlib viewer.
+
+# ----------------------------------
+# PARAMETERS ALLOW CHANGE
+# ----------------------------------
+
+    # paths
+    data_path: directory of uManager data
+    save_path: primary directory for output saving
+    
+    # values for analysis
+    data_c: channel to be analyzed
+    pos: position of the given FOV in multi-image dataset, default = 0
+    thresholding: global thresholding method used for nucleoli segmentation; only accepts 'na', 
+        'otsu', 'yen', 'local-nucleoli' and 'local-sg'
+    min_size: the smallest allowable nucleoli size
+    max_size: the largest allowable nucleoli size
+    num_dilation: number of dilation used to generate bleach spots, determines size of bleach spots
+        default = 3
+    
+    # modes
+    mode_bleach_detection: bleach spots detection modes; only accept 'single-raw' or 'single-offset'
+    display_mode: displays stitched images in napari or not; only accepts 'N' or 'Y'
+
+"""
+
 # --------------------------
 # PARAMETERS allow change
 # --------------------------
@@ -43,6 +105,12 @@ num_dilation = 3  # number of dilation from the coordinate;
 # modes
 mode_bleach_detection = 'single-offset'  # only accepts 'single-raw' or 'single-offset'
 display_mode = 'N'  # only accepts 'N' or 'Y'
+
+"""
+# ---------------------------------------------------------------------------------------------------
+# PLEASE DO NOT CHANGE AFTER THIS
+# ---------------------------------------------------------------------------------------------------
+"""
 
 # --------------------------
 # LOAD MOVIE
