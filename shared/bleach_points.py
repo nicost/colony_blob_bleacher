@@ -4,22 +4,16 @@ import shared.analysis as ana
 import collections
 from skimage.measure import label, regionprops
 import numpy as np
-from scipy.optimize import curve_fit
-import shared.math_functions as mat
 from skimage.filters import threshold_otsu
 from skimage.morphology import binary_erosion, binary_dilation
 import pandas as pd
 
 """
 # ---------------------------------------------------------------------------------------------------
-# FUNCTIONS for BLEACH SPOTS/FRAP ANALYSIS
+# FUNCTIONS for FRAP ANALYSIS
 # ---------------------------------------------------------------------------------------------------
 
 pd.DataFrame related:
-
-    get_bleach_frame
-        FUNCTION: get bleach frames of all the potential bleach spots
-        SYNTAX:   get_bleach_frame(log_pd: pd.DataFrame, acquire_time_tseries: list)
     
     get_bleach_spots_coordinates
         FUNCTION: get coordinates of bleach spots
@@ -33,29 +27,15 @@ pd.DataFrame related:
         FUNCTION: filter bleach spots
         SYNTAX:   filter_bleach_spots(log_pd: pd.DataFrame)
     
+    frap_analysis
+        FUNCTION: analyze FRAP curve
+        SYNTAX:   frap_analysis(pointer_pd: pd.DataFrame, max_t: int, acquire_time_tseries: list, real_time: list)
+    
+    frap_filter
+        FUNCTION: filter FRAP curves
+        SYNTAX:   frap_filter(pointer_pd: pd.DataFrame)
     
 """
-
-
-def get_bleach_frame(log_pd: pd.DataFrame, acquire_time_tseries: list):
-    """
-    Get bleach frames of all the potential bleach spots
-
-    :param log_pd: pd.DataFrame, requires columns 'time'
-                'time': photobleaching time displayed in uManager metadata format
-    :param acquire_time_tseries: list
-                list of acquisition time displayed in 'hour:min:sec' format
-                e.g. ['17:30:38.360', '17:30:38.455', '17:30:38.536', '17:30:38.615', ...]
-    :return: bleach_frame: list, list of bleach frames
-
-    """
-    bleach_frame = []  # frame number of or right after photobleaching
-    for i in range(len(log_pd)):
-        # number of first frame after photobleaching (num_pre)
-        num_pre = dat.find_pos(log_pd['time'][i].split(' ')[1], acquire_time_tseries)
-        bleach_frame.append(num_pre)
-
-    return bleach_frame
 
 
 def get_bleach_spots_coordinates(log_pd: pd.DataFrame, store, cb, data_c: int, mode: str):
@@ -85,11 +65,11 @@ def get_bleach_spots_coordinates(log_pd: pd.DataFrame, store, cb, data_c: int, m
     :param cb: cb = mm.data().get_coords_builder()
     :param data_c: channel to be analyzed
     :param mode: bleach spot detection mode, currently only accepts 'single-raw' and 'single-offset'
-    :return: dataframe: pd.DataFrame, same index as log_pd with columns 'x', 'y', 'x_diff', 'y_diff'
+    :return: coordinate_pd: pd.DataFrame, same index as log_pd with columns 'x', 'y', 'x_diff', 'y_diff'
 
     """
     if mode == 'single-raw':
-        dataframe = pd.DataFrame({'x': log_pd['aim_x'],
+        coordinate_pd = pd.DataFrame({'x': log_pd['aim_x'],
                                   'y': log_pd['aim_y'],
                                   'x_diff': [0] * len(log_pd),
                                   'y_diff': [0] * len(log_pd)})
@@ -150,23 +130,24 @@ def get_bleach_spots_coordinates(log_pd: pd.DataFrame, store, cb, data_c: int, m
                 x_lst.append(log_pd['aim_x'][i])
                 y_lst.append(log_pd['aim_y'][i])
 
-        dataframe = pd.DataFrame({'x': x_lst, 'y': y_lst})
-        dataframe['x_diff'] = dataframe['x'] - log_pd['aim_x']
-        dataframe['y_diff'] = log_pd['aim_y'] - dataframe['y']
+        coordinate_pd = pd.DataFrame({'x': x_lst, 'y': y_lst})
+        coordinate_pd['x_diff'] = coordinate_pd['x'] - log_pd['aim_x']
+        coordinate_pd['y_diff'] = log_pd['aim_y'] - coordinate_pd['y']
 
     else:
-        dataframe = pd.DataFrame()
+        coordinate_pd = pd.DataFrame()
 
-    return dataframe
+    return coordinate_pd
 
 
 def get_bleach_spots(log_pd: pd.DataFrame, label_nucleoli: np.array, num_dilation=3):
     """
     Generate bleach spots mask and corresponding pd.DataFrame table
 
-    :param log_pd: pd.DataFrame, requires columns 'x', 'y'
+    :param log_pd: pd.DataFrame, requires columns 'x', 'y', 'nucleoli'
                 'x': x coordinates of all possible bleach spots
                 'y': y coordinates of all possible bleach spots
+                'nucleoli': pointer corresponding nucleoli label index
                 originally imports from .log file
     :param label_nucleoli: np.array, grey scale labeled nucleoli image
     :param num_dilation: int, optional (default: 3)
@@ -180,9 +161,7 @@ def get_bleach_spots(log_pd: pd.DataFrame, label_nucleoli: np.array, num_dilatio
                 sorted based on bleach spots, ascending
 
     """
-
-    # link pointer with corresponding nucleoli/ detected bleach spots
-    log_pd['nucleoli'] = obj.points_in_objects(label_nucleoli, log_pd['x'], log_pd['y'])
+    # link pointer with corresponding detected bleach spots
     bleach_spots = ana.analysis_mask(log_pd['y'], log_pd['x'], label_nucleoli, num_dilation)
     label_bleach_spots = label(bleach_spots, connectivity=1)
     log_pd['bleach_spots'] = obj.points_in_objects(label_bleach_spots, log_pd['x'], log_pd['y'])
@@ -244,84 +223,46 @@ def filter_bleach_spots(log_pd: pd.DataFrame):
     return pointer_pd
 
 
-def get_frap(pointer_pd: pd.DataFrame, store, cb, bleach_spots: np.array, nucleoli_pd: pd.DataFrame,
-             log_pd: pd.DataFrame, num_dilation=3):
+def frap_analysis(pointer_pd: pd.DataFrame, max_t: int, acquire_time_tseries: list, real_time: list):
+    """
+    Analyze FRAP curve
 
-    # get image size of any frame
-    img = store.get_image(cb.c(0).z(0).p(0).t(0).build())
-    max_t = store.get_max_indices().get_t()
-    pixels = np.reshape(img.get_raw_pixels(), newshape=[img.get_height(), img.get_width()])
+    :param pointer_pd: pd.DataFrame, requires columns 'bleach_frame', 'mean_int'
+                'bleach_frame': frame of or right after photobleaching
+                'mean_int': FRAP double corrected intensity series
+    :param max_t: int
+                number of total frame
+    :param acquire_time_tseries: list
+                list of acquisition time displayed in 'hour:min:sec' format
+                e.g. ['17:30:38.360', '17:30:38.455', '17:30:38.536', '17:30:38.615', ...]
+    :param real_time: list
+                list of time in sec with first frame set as 0
+                e.g. [0.0, 0.09499999999999886, 0.17600000000000193, 0.25500000000000256, ...]
+    :return: frap_pd: pd.DataFrame
+                add information: 'int_curve_nor', 'frap_start_frame', 'imaging_length', 'int_curve_pre',
+                'int_curve_post', 'int_curve_post_nor', 'real_time_post', 'pre_bleach_int', 'frap_start_int',
+                'plateau_int', 'mobile_fraction', 'immobile_fraction', 'half_int', 'half_int_nor',
+                'half_frame', 't_half', 'ini_slope'
 
-    # create analysis mask for control spots
-    ctrl_nucleoli = ~nucleoli_pd.index.isin(log_pd['nucleoli'].tolist())
-    ctrl_x = nucleoli_pd[ctrl_nucleoli]['centroid_x'].astype(int).tolist()
-    ctrl_y = nucleoli_pd[ctrl_nucleoli]['centroid_y'].astype(int).tolist()
-    ctrl_spots = ana.analysis_mask(ctrl_x, ctrl_y, pixels, num_dilation)
+                'int_curve_nor': intensity series normalized with pre_bleach_int and frap_start_int (min_int)
+                'frap_start_frame': bleach_frame + 4, generally the frame of minimum intensity
+                'imaging_length': number of frames of FRAP curves
+                'int_curve_pre': intensity series before photobleaching (without bleach_frame, before spike)
+                'int_curve_post': FRAP curve, intensity series after minimum intensity (includes frap_start_frame)
+                'int_curve_post_nor': t_int_post normalized with pre_bleach_int and frap_start_int (min_int)
+                'real_time_post': time series represents in second
+                'pre_bleach_int': mean intensity before photobleaching; pre-bleach intensity
+                'frap_start_int': frap start intensity after photobleaching, generally minimum intensity
+                'plateau_int': plateau level intensity calculated from last 10 frames
+                'mobile_fraction': int_plateau normalized with pre_bleach_int and frap_start_int (min_int)
+                'immobile_fraction': 1 - mobile_fraction
+                'half_int': half intensity
+                'half_int_nor': int_half normalized with pre_bleach_int and frap_start_int (min_int)
+                'half_frame': number of frames it takes to reach half intensity (frap_start_frame, half_int_frame]
+                't_half': t-half
+                'ini_slope': initial slope of the recovery curve (relative intensity)
 
-    # get pixels_tseries and mean_intensity
-    pixels_tseries = []
-    bleach_spots_int_tseries = [[] for _ in range(obj.object_count(bleach_spots))]
-    ctrl_spots_int_tseries = [[] for _ in range(obj.object_count(ctrl_spots))]
-    for t in range(0, max_t):
-        img = store.get_image(cb.t(t).build())
-        pixels = np.reshape(img.get_raw_pixels(), newshape=[img.get_height(), img.get_width()])
-        pixels_tseries.append(pixels)
-        # measure mean intensity for bleach spots and control spots
-        bleach_spots_props = regionprops(label(bleach_spots, connectivity=1), pixels)
-        ctrl_spots_props = regionprops(label(ctrl_spots, connectivity=1), pixels)
-        for i in range(len(bleach_spots_props)):
-            bleach_spots_int_tseries[i].append(bleach_spots_props[i].mean_intensity)
-        for i in range(len(ctrl_spots_props)):
-            ctrl_spots_int_tseries[i].append(ctrl_spots_props[i].mean_intensity)
-    pointer_pd['raw_int'] = bleach_spots_int_tseries
-
-    # background intensity measurement
-    bg_int_tseries = ana.get_bg_int(pixels_tseries)
-    pointer_pd['bg_int'] = [bg_int_tseries] * len(pointer_pd)
-
-    # background intensity fitting
-    pointer_pd = bg_fitting_linear(pointer_pd)
-
-    # background correction
-    if np.isnan(pointer_pd['bg_linear_a'][0]):
-        bg = bg_int_tseries
-    else:
-        bg = pointer_pd['bg_linear_fit'][0]
-    bleach_spots_int_cor = ana.bg_correction(bleach_spots_int_tseries, bg)
-    ctrl_spots_int_cor = ana.bg_correction(ctrl_spots_int_tseries, bg)
-    pointer_pd['bg_cor_int'] = bleach_spots_int_cor
-    num_ctrl_spots = obj.object_count(ctrl_spots)
-    ctrl_pd = pd.DataFrame({'ctrl_spots': np.arange(0, num_ctrl_spots, 1), 'raw_int': ctrl_spots_int_tseries,
-                            'bg_cor_int': ctrl_spots_int_cor})
-    pointer_pd['num_ctrl_spots'] = [num_ctrl_spots] * len(pointer_pd)
-
-    # photobleaching correction
-    if num_ctrl_spots != 0:
-        # calculate photobleaching factor
-        pb_factor = ana.get_pb_factor(ctrl_spots_int_cor)
-        pointer_pd['pb_factor'] = [pb_factor] * len(pointer_pd)
-        print("%d ctrl points are used to correct photobleaching." % obj.object_count(ctrl_spots))
-        # pb_factor fitting with single exponential decay
-        pointer_pd = pb_factor_fitting_single_exp(pointer_pd)
-
-        # photobleaching correction
-        if np.isnan(pointer_pd['pb_single_exp_decay_a'][0]):
-            pb = pb_factor
-        else:
-            pb = pointer_pd['pb_single_exp_decay_fit'][0]
-        bleach_spots_int_dual_cor = ana.pb_correction(bleach_spots_int_cor, pb)
-        # add corrected intensities into pointer_ft
-        pointer_pd['mean_int'] = bleach_spots_int_dual_cor
-
-    return pointer_pd, ctrl_pd
-
-
-
-
-
-def frap_analysis(pointer_pd, store, cb):
-    max_t = store.get_max_indices().get_t()
-    acquire_time_tseries, real_time = dat.get_time_tseries(store, cb)
+    """
     # for all the bleach spots
     frap_start_frame = []  # bleach_frame + 4
     # frame number of the minimum intensity
@@ -344,7 +285,7 @@ def frap_analysis(pointer_pd, store, cb):
 
     for i in range(len(pointer_pd)):
         # number of first frame after photobleaching (num_pre)
-        num_pre = dat.find_pos(pointer_pd['time'][i].split(' ')[1], acquire_time_tseries)
+        num_pre = pointer_pd['bleach_frame'][i]
         # frap curve starting point
         frap_start_frame_temp = pointer_pd['bleach_frame'][i] + 4
         frap_start_frame.append(frap_start_frame_temp)
@@ -395,109 +336,51 @@ def frap_analysis(pointer_pd, store, cb):
         slope_temp = 1.0 * (int_change / t_change)
         slope.append(slope_temp)
 
-    pointer_pd = dat.add_columns(pointer_pd, ['int_curve_nor', 'frap_start_frame', 'imaging_length',
-                                              'int_curve_pre', 'int_curve_post', 'int_curve_post_nor', 'real_time_post',
-                                              'pre_bleach_int', 'frap_start_int', 'plateau_int', 'mobile_fraction',
-                                              'immobile_fraction', 'half_int', 'half_int_nor', 'half_frame',
-                                              't_half', 'ini_slope'],
-                                 [mean_int_nor,  frap_start_frame, imaging_length,
-                                  t_int_pre, t_int_post, t_int_post_nor, real_time_post,
-                                  pre_bleach_int, frap_start_int, plateau_int, plateau_int_nor,
-                                  immobile_fraction, half_int, half_int_nor, half_frame,
-                                  t_half, slope])
+    frap_pd = pd.DataFrame({'int_curve_nor': mean_int_nor,
+                            'frap_start_frame': frap_start_frame,
+                            'imaging_length': imaging_length,
+                            'int_curve_pre': t_int_pre,
+                            'int_curve_post': t_int_post,
+                            'int_curve_post_nor': t_int_post_nor,
+                            'real_time_post': real_time_post,
+                            'pre_bleach_int': pre_bleach_int,
+                            'frap_start_int': frap_start_int,
+                            'plateau_int': plateau_int,
+                            'mobile_fraction': plateau_int_nor,
+                            'immobile_fraction': immobile_fraction,
+                            'half_int': half_int,
+                            'half_int_nor': half_int_nor,
+                            'half_frame': half_frame,
+                            't_half': t_half,
+                            'ini_slope': slope})
 
-    return pointer_pd
-
-
-def bg_fitting_linear(pointer_pd):
-
-    bg = pointer_pd['bg_int'][0]
-    try:
-        popt, _ = curve_fit(mat.linear, np.arange(0, len(bg), 1), bg)
-        a, b = popt
-    except RuntimeError:
-        a = np.nan
-        b = np.nan
-
-    bg_fit = []
-    for j in range(len(bg)):
-        bg_fit.append(mat.linear(j, a, b))
-    r2 = mat.r_square(bg, bg_fit)
-
-    pointer_pd = dat.add_columns(pointer_pd, ['bg_linear_fit', 'bg_linear_r2', 'bg_linear_a', 'bg_linear_b'],
-                                 [[bg_fit] * len(pointer_pd), [r2] * len(pointer_pd),
-                                  [a] * len(pointer_pd), [b] * len(pointer_pd)])
-
-    return pointer_pd
+    return frap_pd
 
 
-def pb_factor_fitting_single_exp(pointer_pd):
-    pb = pointer_pd['pb_factor'][0]
-    try:
-        popt, _ = curve_fit(mat.single_exp_decay, np.arange(0, len(pb), 1), pb)
-        a, b = popt
-    except RuntimeError:
-        a = np.nan
-        b = np.nan
+def frap_filter(pointer_pd: pd.DataFrame):
+    """
+    Filter FRAP curves
 
-    pb_fit = []
-    for j in range(len(pb)):
-        pb_fit.append(mat.single_exp_decay(j, a, b))
-    r2 = mat.r_square(pb, pb_fit)
+    filter frap curves:
+    1) number of pre_bleach frame < 5
+    2) total imaging length < 150
+    3) does not find optional fit (single exponential)
+    4) mobile fraction < 0 or mobile fraction > 1.5
+    5) r2 of fit < 0.5
 
-    pointer_pd = dat.add_columns(pointer_pd, ['pb_single_exp_decay_fit', 'pb_single_exp_decay_r2',
-                                              'pb_single_exp_decay_a', 'pb_single_exp_decay_b'],
-                                 [[pb_fit] * len(pointer_pd), [r2] * len(pointer_pd),
-                                  [a] * len(pointer_pd), [b] * len(pointer_pd)])
+    :param pointer_pd: pd.DataFrame, requires columns 'bleach_frame', 'imaging_length', 'single_exp_a',
+                'single_exp_r2'
 
-    return pointer_pd
+                'bleach_frame': photobleaching frame
+                'imaging_length': number of frames of FRAP curves
+                'single_exp_a': parameter a of FRAP curve single exponential fit (a * (1 - np.exp(-b * x)))
+                'single_exp_r2': r square of FRAP curve single exponential fit (a * (1 - np.exp(-b * x)))
+    :return: pointer_pd: pd.DataFrame, add one column 'frap_filter'
+                'frap_filter': FRAP curve filtering result
+                    1: passed
+                    0: not passed
 
-
-def frap_fitting_single_exp(pointer_pd):
-
-    single_exp_a = []
-    single_exp_b = []
-    single_exp_fit = []
-    single_exp_r2 = []
-    single_exp_t_half = []
-
-    for i in range(len(pointer_pd)):
-        try:
-            popt, _ = curve_fit(mat.single_exp, pointer_pd['real_time_post'][i], pointer_pd['int_curve_post_nor'][i])
-            a, b = popt
-        except RuntimeError:
-            a = np.nan
-            b = np.nan
-
-        y_fit = []
-        for j in range(len(pointer_pd['real_time_post'][i])):
-            y_fit.append(mat.single_exp(pointer_pd['real_time_post'][i][j], a, b))
-        r2 = mat.r_square(pointer_pd['int_curve_post_nor'][i], y_fit)
-        t_half_fit = np.log(0.5) / (-b)
-        single_exp_a.append(a)
-        single_exp_b.append(b)
-        single_exp_fit.append(y_fit)
-        single_exp_r2.append(r2)
-        single_exp_t_half.append(t_half_fit)
-
-    pointer_pd = dat.add_columns(pointer_pd, ['single_exp_fit', 'single_exp_r2', 'single_exp_a', 'single_exp_b',
-                                              'single_exp_mobile_fraction', 'single_exp_t_half'],
-                                 [single_exp_fit, single_exp_r2, single_exp_a, single_exp_b,
-                                  single_exp_a, single_exp_t_half])
-
-    return pointer_pd
-
-
-
-
-
-def frap_filter(pointer_pd):
-    # filter frap curves
-    # 1) number of pre_bleach frame < 5
-    # 2) total imaging length < 150
-    # 3) does not find optional fit (single exponential)
-    # 4) mobile fraction < 0 or mobile fraction > 1.5
-    # 5) r2 of fit < 0.5
+    """
 
     frap_flt = []
     for i in range(len(pointer_pd)):
@@ -528,4 +411,3 @@ def frap_filter(pointer_pd):
                            & (pointer_pd['single_exp_a'] < 1.5) & (pointer_pd['single_exp_r2'] < 0.5)]))
 
     return pointer_pd
-
