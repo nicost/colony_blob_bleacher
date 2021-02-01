@@ -9,8 +9,8 @@ else:
     from matplotlib.backends.backend_qt4agg import FigureCanvas
 from matplotlib.figure import Figure
 from vispy.color import Colormap
+from shared.find_organelles import find_organelle, organelle_analysis, find_nuclear, nuclear_analysis
 from skimage.measure import label
-from shared.find_organelles import find_organelle, nucleoli_analysis, find_nuclear, nuclear_analysis
 import shared.analysis as ana
 import shared.dataframe as dat
 import shared.display as dis
@@ -87,7 +87,12 @@ data_log['num_nucleoli_detected'] = [obj.object_count(nucleoli)]
 print("Found %d nucleoli." % data_log['num_nucleoli_detected'][0])
 
 # nucleoli pd dataset
-nucleoli_pd = nucleoli_analysis(pix, nucleoli, label_nuclear, pos)
+nucleoli_pd = organelle_analysis(pix, nucleoli, 'nucleoli', pos)
+# link nucleoli with corresponding nuclear
+round_x = [round(num) for num in nucleoli_pd['x']]
+round_y = [round(num) for num in nucleoli_pd['y']]
+nucleoli_pd['nuclear'] = obj.points_in_objects(label_nuclear, round_y, round_x)
+
 data_log['num_nucleoli_in_nuclei'] = [len(nucleoli_pd[nucleoli_pd['nuclear'] != 0])]
 print("Found %d out of %d nucleoli within nuclei." % (data_log['num_nucleoli_in_nuclei'][0],
                                                       obj.object_count(nucleoli)))
@@ -125,7 +130,7 @@ print("%d spots passed filters for analysis." % data_log['num_bleach_spots'][0])
 pointer_pd = dat.copy_based_on_index(pointer_pd, nucleoli_pd, 'nucleoli', 'nucleoli',
                                      ['nucleoli_x', 'nucleoli_y', 'nucleoli_size',
                                       'nucleoli_mean_int', 'nucleoli_circ'],
-                                     ['centroid_x', 'centroid_y', 'size', 'mean_int', 'circ'])
+                                     ['x', 'y', 'size', 'raw_int', 'circ'])
 
 # --------------------------------------------------
 # FRAP CURVE ANALYSIS from bleach spots
@@ -134,8 +139,8 @@ print("### Image analysis: FRAP curve calculation ...")
 
 # create control spots mask
 ctrl_nucleoli = ~nucleoli_pd.index.isin(log_pd['nucleoli'].tolist())
-ctrl_x = nucleoli_pd[ctrl_nucleoli]['centroid_x'].astype(int).tolist()
-ctrl_y = nucleoli_pd[ctrl_nucleoli]['centroid_y'].astype(int).tolist()
+ctrl_x = nucleoli_pd[ctrl_nucleoli]['x'].astype(int).tolist()
+ctrl_y = nucleoli_pd[ctrl_nucleoli]['y'].astype(int).tolist()
 ctrl_spots = ana.analysis_mask(ctrl_x, ctrl_y, pix, num_dilation)
 num_ctrl_spots = obj.object_count(ctrl_spots)
 pointer_pd['num_ctrl_spots'] = [num_ctrl_spots] * len(pointer_pd)
@@ -150,7 +155,7 @@ bg_int_tseries = ana.get_bg_int(pixels_tseries)
 pointer_pd['bg_int'] = [bg_int_tseries] * len(pointer_pd)
 
 # background intensity fitting
-bg_fit = mat.bg_fitting_linear(bg_int_tseries)
+bg_fit = mat.fitting_linear(np.arange(0, len(bg_int_tseries), 1), bg_int_tseries)
 pointer_pd = dat.add_columns(pointer_pd, ['bg_linear_fit', 'bg_linear_r2', 'bg_linear_a', 'bg_linear_b'],
                              [[bg_fit[0]] * len(pointer_pd), [bg_fit[1]] * len(pointer_pd),
                               [bg_fit[2]] * len(pointer_pd), [bg_fit[3]] * len(pointer_pd)])
@@ -172,7 +177,7 @@ if num_ctrl_spots != 0:
     print("%d ctrl points are used to correct photobleaching." % len(ctrl_pd))
 
     # pb_factor fitting with single exponential decay
-    pb_fit = mat.pb_factor_fitting_single_exp(pb_factor)
+    pb_fit = mat.fitting_single_exp_decay(np.arange(0, len(pb_factor), 1), pb_factor)
     pointer_pd = dat.add_columns(pointer_pd, ['pb_single_exp_decay_fit', 'pb_single_exp_decay_r2',
                                               'pb_single_exp_decay_a', 'pb_single_exp_decay_b'],
                                  [[pb_fit[0]] * len(pointer_pd), [pb_fit[1]] * len(pointer_pd),
