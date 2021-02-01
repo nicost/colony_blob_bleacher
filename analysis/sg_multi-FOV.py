@@ -3,7 +3,7 @@ import pandas as pd
 import napari
 from pycromanager import Bridge
 from matplotlib import pyplot as plt
-from shared.find_organelles import sg_analysis, find_organelle
+from shared.find_organelles import organelle_analysis, find_organelle
 import shared.dataframe as dat
 import shared.analysis as ana
 import shared.display as dis
@@ -73,7 +73,7 @@ DISPLAYS
 # --------------------------
 # paths
 data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/20210100_SG_scoring/WT"
-save_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/20210100_SG_scoring/dataAnalysis/"
+save_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/20210100_SG_scoring/dataAnalysis1/"
 
 # values for analysis
 data_t = 0  # non-negative int, make sure within data range
@@ -85,10 +85,10 @@ max_size = 350  # non-negative int
 
 # modes
 analyze_boundary = 'N'  # only accepts 'N' or 'Y'
-export_mode = 'N'  # only accepts 'N' or 'Y'
-export_pd_pre_stitch = 'N'  # only accepts 'N' or 'Y'
+export_mode = 'Y'  # only accepts 'N' or 'Y'
+export_pd_pre_stitch = 'Y'  # only accepts 'N' or 'Y'
 export_pd_post_stitch = 'N'  # only accepts 'N' or 'Y'
-export_img = 'N'  # only accepts 'N' or 'Y'
+export_img = 'Y'  # only accepts 'N' or 'Y'
 display_mode = 'Y'  # only accepts 'N' or 'Y'
 
 # color-coded (cc) images calculation (added due to time concern)
@@ -138,7 +138,7 @@ for i in range(max_p+1):
     pix_lst.append(temp_pix)
     sg_lst.append(temp_sg)
     if export_pd_pre_stitch == 'Y':
-        temp_sg_pd = sg_analysis(temp_pix, temp_sg, i)
+        temp_sg_pd = organelle_analysis(temp_pix, temp_sg, 'sg', i)
         sg_fov_pd = pd.concat([sg_fov_pd, temp_sg_pd], ignore_index=True)
 
 print("### Image analysis: Stitch image ...")
@@ -153,7 +153,8 @@ elif analyze_boundary == 'N':
 else:
     sg = find_organelle(pix, thresholding, min_size=min_size, max_size=max_size)
 
-sg_pd = sg_analysis(pix, sg, 0)  # SG dataFrame based on multi-FOV stitched image
+label_sg = label(sg, connectivity=1)
+sg_pd = organelle_analysis(pix, sg, 'sg', 0)  # SG dataFrame based on multi-FOV stitched image
 
 # --------------------------
 # COLOR CODED IMAGES
@@ -164,7 +165,7 @@ cmap1 = 'YlOrRd'
 cmap1_napari = dis.num_color_colormap(cmap1, 255)[0]
 cmap1_plt = dis.num_color_colormap(cmap1, 255)[1]
 if cc_circ == 'Y':
-    sg_circ = obj.obj_display_in_circularity(sg)
+    sg_circ = obj.obj_display_in_circularity(label_sg)
 else:
     sg_circ = np.zeros_like(sg)
 
@@ -172,7 +173,7 @@ cmap2 = 'Blues'
 cmap2_napari = dis.num_color_colormap(cmap2, 255)[0]
 cmap2_plt = dis.num_color_colormap(cmap2, 255)[1]
 if cc_ecce == 'Y':
-    sg_ecce = obj.obj_display_in_eccentricity(sg)
+    sg_ecce = obj.obj_display_in_eccentricity(label_sg)
 else:
     sg_ecce = np.zeros_like(sg)
 
@@ -180,7 +181,7 @@ cmap3 = 'viridis'
 cmap3_napari = dis.num_color_colormap(cmap3, 255)[0]
 cmap3_plt = dis.num_color_colormap(cmap3, 255)[1]
 if cc_int == 'Y':
-    sg_int = obj.obj_display_in_intensity(sg, pix, [6, 10])
+    sg_int = obj.obj_display_in_intensity(label_sg, pix, [6, 10])
 else:
     sg_int = np.zeros_like(sg)
 
@@ -250,7 +251,7 @@ if display_mode == 'Y':
         # stitched SG label with properties
         sg_properties = {
             'size': ['none'] + list(sg_pd['size']),  # background is size: none
-            'int': ['none'] + list(sg_pd['int']),
+            'int': ['none'] + list(sg_pd['raw_int']),
             'circ': ['none'] + list(sg_pd['circ']),
             'eccentricity': ['none'] + list(sg_pd['eccentricity'])
         }
