@@ -17,7 +17,7 @@ import os
 # ---------------------------------------------------------------------------------------------------
 
 EXPECTS 
-    an uManager data, 
+    an uManager data (single z), 
 SEGMENTS and ANALYZES
     SG properties (enables size, mean intensity, circularity and eccentricity) for all positions with 
     the same time/channel/z-plane, 
@@ -78,7 +78,6 @@ save_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/202101
 # values for analysis
 data_t = 0  # non-negative int, make sure within data range
 data_c = 0  # non-negative int, make sure within data range
-data_z = 0  # non-negative int, make sure within data range
 thresholding = 'local-sg'  # only accepts 'na', 'otsu', 'yen', 'local-nucleoli' and 'local-sg'
 min_size = 5  # non-negative int
 max_size = 350  # non-negative int
@@ -129,7 +128,7 @@ col_lst = []  # column location of given FOV in multi-FOV-grid
 pix_lst = []  # list of t(0).p(0) image for multi-FOV-display
 sg_lst = []  # list of t(0).p(0) SG mask for multi-FOV-display
 for i in range(max_p+1):
-    temp = store.get_image(cb.t(data_t).c(data_c).z(data_z).p(i).build())
+    temp = store.get_image(cb.t(data_t).c(data_c).z(0).p(i).build())
     temp_pix = np.reshape(temp.get_raw_pixels(), newshape=[temp.get_height(), temp.get_width()])
     temp_sg = find_organelle(temp_pix, thresholding, min_size=min_size, max_size=max_size)
     row, col = dat.get_grid_pos(i, num_grid)
