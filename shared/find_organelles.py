@@ -1,7 +1,3 @@
-# ------------------------------------------
-# FUNCTIONS for ORGANELLE DETECTION
-# ------------------------------------------
-
 from skimage.segmentation import clear_border, random_walker
 from shared.find_blobs import find_blobs, get_binary_global
 from shared.objects import remove_small, remove_large
@@ -12,13 +8,36 @@ import pandas as pd
 import math
 from scipy import ndimage
 import shared.objects as obj
-import shared.analysis as ana
+
+"""
+# ---------------------------------------------------------------------------------------------------
+# FUNCTIONS for ORGANELLE IDENTIFICATION/ANALYSIS
+# ---------------------------------------------------------------------------------------------------
+
+find_organelle
+    FUNCTION: find organelle (nucleoli or SG) from a given image
+    SYNTAX:   find_organelle(pixels: np.array, global_thresholding='na', extreme_val=500, bg_val=200,
+              min_size=5, max_size=1000)
+
+organelle_analysis
+    FUNCTION: analyze object properties and return a pd.DataFrame table, for SG/nucleoli
+    SYNTAX:   organelle_analysis(pixels: np.array, organelle: np.array, organelle_name: str, pos=0)
+
+find_nuclear
+    FUNCTION: detect nuclear in nucleoli stain images
+    SYNTAX:   find_nuclear(pixels: np.array)
+
+nuclear_analysis
+    FUNCTION: analyze nuclear properties and return a pd.DataFrame table
+    SYNTAX:   nuclear_analysis(label_nuclear: np.array, nucleoli_pd: pd.DataFrame, pos=0)
+
+"""
 
 
 def find_organelle(pixels: np.array, global_thresholding='na', extreme_val=500, bg_val=200,
                    min_size=5, max_size=1000):
     """
-    Find organelle(nucleoli or SG) from a given image.
+    Find organelle (nucleoli or SG) from a given image.
 
     Expects pixels to be an array, and finds nucleoli objects using watershed by
     flooding approach with indicated global thresholding methods (supports 'na',
@@ -54,13 +73,14 @@ def find_organelle(pixels: np.array, global_thresholding='na', extreme_val=500, 
     if global_thresholding not in check_lst:
         raise ValueError("global thresholding method only accepts %s. Got %s" % (check_lst, global_thresholding))
 
-    # find nucleoli
+    # find organelle
     organelle = find_blobs(pixels, get_binary_global(pixels, global_thresholding, min_size, max_size),
                            extreme_val, bg_val, max_size)
 
-    # Nucleoli filters:
+    # Filters:
     # Location filter: remove artifacts connected to image border
     organelle_filtered = clear_border(organelle)
+
     # Size filter: default [10,1000]
     organelle_filtered = remove_small(organelle_filtered, min_size)
     organelle_filtered = remove_large(organelle_filtered, max_size)
@@ -68,74 +88,48 @@ def find_organelle(pixels: np.array, global_thresholding='na', extreme_val=500, 
     return organelle_filtered
 
 
-def sg_analysis(pixels: np.array, sg, pos=0):
+def organelle_analysis(pixels: np.array, organelle: np.array, organelle_name: str, pos=0):
     """
-    Analyze SG properties and return a pd.DataFrame table
+    Analyze object properties and return a pd.DataFrame table, for SG/nucleoli
 
     :param pixels: np.array, grey scale image
-    :param sg: np.array, 0-and-1, SG mask
+    :param organelle: np.array, 0-and-1, SG mask
+    :param organelle_name: str
     :param pos: position of pixels (for FOV distinction and multi-image stitch)
-    :return: sg_pd: pd.DataFrame describes SG features including position in uManager dataset, SG number,
-        x, y coordinate, size, mean intensity, circularity and eccentricity
+    :return: organelle_pd: pd.DataFrame describes organelle features, includes 'pos', organelle_name, 'x', 'y',
+                'size', 'raw_int', 'circ', 'eccentricity'
+
+                'pos': position of pixels
+                 organelle_name: organelle label index
+                'x': x coordinate
+                'y': y coordinate
+                'size': area
+                'raw_int': raw mean intensity
+                'circ': circularity
+                'eccentricity': eccentricity
+
     """
-    label_sg = label(sg, connectivity=1)
-    sg_prop = regionprops(label_sg)
-    sg_prop_int = regionprops(label_sg, pixels)
-    sg_areas = [p.area for p in sg_prop]
-    sg_x = [p.centroid[0] for p in sg_prop]
-    sg_y = [p.centroid[1] for p in sg_prop]
-    sg_mean_int = [p.mean_intensity for p in sg_prop_int]
-    sg_label = [p.label for p in sg_prop]
-    sg_circ = [(4 * math.pi * p.area) / (p.perimeter ** 2) for p in sg_prop]
+    label_organelle = label(organelle, connectivity=1)
+    organelle_props = regionprops(label_organelle, pixels)
+
+    organelle_areas = [p.area for p in organelle_props]
+    organelle_x = [p.centroid[0] for p in organelle_props]
+    organelle_y = [p.centroid[1] for p in organelle_props]
+    organelle_label = [p.label for p in organelle_props]
+    organelle_circ = [(4 * math.pi * p.area) / (p.perimeter ** 2) for p in organelle_props]
     # Eccentricity of the ellipse that has the same second-moments as the region.
     # The eccentricity is the ratio of the focal distance (distance between focal points) over the major
     # axis length. The value is in the interval [0, 1). When it is 0, the ellipse becomes a circle.
-    sg_eccentricity = [p.eccentricity for p in sg_prop]
+    organelle_eccentricity = [p.eccentricity for p in organelle_props]
+    organelle_mean_int = [p.mean_intensity for p in organelle_props]
 
-    # sg pd dataset
-    sg_pd = pd.DataFrame({'pos': [pos]*len(sg_prop), 'sg': sg_label, 'x': sg_x, 'y': sg_y, 'size': sg_areas,
-                          'int': sg_mean_int, 'circ': sg_circ, 'eccentricity': sg_eccentricity})
+    # organelle pd dataset
+    organelle_pd = pd.DataFrame({'pos': [pos]*len(organelle_props), organelle_name: organelle_label,
+                                 'x': organelle_x, 'y': organelle_y, 'size': organelle_areas,
+                                 'raw_int': organelle_mean_int, 'circ': organelle_circ,
+                                 'eccentricity': organelle_eccentricity})
 
-    return sg_pd
-
-
-def nucleoli_analysis(pixels: np.array, nucleoli, label_nuclear, pos=0):
-    """
-    Analyze nucleoli properties and return a pd.DataFrame table
-
-    :param: pixels: np.array, grey scale image
-    :param: nucleoli: np.array, 0-and-1, nucleoli mask
-    :param: pos: position of pixels (for FOV distinction and multi-image stitch)
-    :return: nucleoli_pd: pd.DataFrame describes nucleoli features including nucleoli number, size, x, y
-        coordinates of the centroid
-    """
-    # get nucleoli properties
-    nucleoli_label = label(nucleoli, connectivity=1)
-    nucleoli_prop = regionprops(nucleoli_label)
-    nucleoli_prop_int = regionprops(nucleoli_label, pixels)
-    # export nucleoli information about area, centroid, label, circularity
-    nucleoli_areas = [p.area for p in nucleoli_prop]
-    nucleoli_centroid_x = [p.centroid[0] for p in nucleoli_prop]
-    nucleoli_centroid_y = [p.centroid[1] for p in nucleoli_prop]
-    nucleoli_index = [p.label for p in nucleoli_prop]
-    nucleoli_circ = [(4 * math.pi * p.area) / (p.perimeter ** 2) for p in nucleoli_prop]
-    # measure mean_int and export background corrected value
-    # for time 0, does not require photobleaching correction
-    nucleoli_mean_int = [p.mean_intensity for p in nucleoli_prop_int]
-    bg_int = ana.get_bg_int([pixels])[0]
-    nucleoli_mean_int_cor = [x - bg_int for x in nucleoli_mean_int]
-
-    # nucleoli pd dataset
-    nucleoli_pd = pd.DataFrame({'pos': [pos]*len(nucleoli_prop), 'nucleoli': nucleoli_index, 'size': nucleoli_areas,
-                                'centroid_x': nucleoli_centroid_x, 'centroid_y': nucleoli_centroid_y,
-                                'mean_int': nucleoli_mean_int_cor, 'circ': nucleoli_circ})
-
-    # link nucleoli with corresponding nuclear
-    round_x = [round(num) for num in nucleoli_centroid_x]
-    round_y = [round(num) for num in nucleoli_centroid_y]
-    nucleoli_pd['nuclear'] = obj.points_in_objects(label_nuclear, round_y, round_x)
-
-    return nucleoli_pd
+    return organelle_pd
 
 
 def find_nuclear(pixels: np.array):
@@ -143,7 +137,7 @@ def find_nuclear(pixels: np.array):
     Detect nuclear in nucleoli stain images
 
     :param pixels: np.array, nucleoli stain image
-    :return: label_nuclear_sort: np.array, grey scale with each nuclear labeled
+    :return: label_nuclear_sort: np.array, grey scale labeled nuclear image
     """
     # nuclear detection
     markers = np.zeros_like(pixels)
@@ -167,28 +161,28 @@ def find_nuclear(pixels: np.array):
     return label_nuclear_sort
 
 
-def nuclear_analysis(label_nuclear: np.array, nucleoli_pd, pos):
+def nuclear_analysis(label_nuclear: np.array, nucleoli_pd: pd.DataFrame, pos=0):
+    """
+    Analyze nuclear properties and return a pd.DataFrame table
+
+    :param label_nuclear: np.array, grey scale labeled nuclear image
+    :param nucleoli_pd: pd.DataFrame, nucleoli table
+    :param pos: FOV position
+    :return: nuclear_pd: pd.DataFrame, nuclear table
+    """
     nuclear_prop = regionprops(label_nuclear)
     nuclear_centroid_x = [p.centroid[0] for p in nuclear_prop]
     nuclear_centroid_y = [p.centroid[1] for p in nuclear_prop]
     nuclear_index = [p.label for p in nuclear_prop]
 
     nuclear_pd = pd.DataFrame({'pos': [pos]*len(nuclear_prop), 'nuclear': nuclear_index,
-                               'centroid_x': nuclear_centroid_x, 'centroid_y': nuclear_centroid_y})
+                               'x': nuclear_centroid_x, 'y': nuclear_centroid_y})
 
     num_nucleoli = []
-    total_nucleoli_int = []
     for i in nuclear_pd['nuclear']:
         nucleoli_pd_temp = nucleoli_pd[nucleoli_pd['nuclear'] == i].reset_index(drop=True)
         num_nucleoli.append(len(nucleoli_pd_temp))
-        total_nucleoli_int_temp = 0
-        if len(nucleoli_pd_temp) != 0:
-            for j in range(len(nucleoli_pd_temp)):
-                total_nucleoli_int_temp += nucleoli_pd_temp['mean_int'][j] * nucleoli_pd_temp['size'][j]
-        total_nucleoli_int.append(total_nucleoli_int_temp)
 
     nuclear_pd['num_nucleoli'] = num_nucleoli
-    nuclear_pd['total_nucleoli_int '] = total_nucleoli_int
 
     return nuclear_pd
-
