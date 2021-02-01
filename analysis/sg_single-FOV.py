@@ -14,7 +14,7 @@ import os
 # ---------------------------------------------------------------------------------------------------
 
 EXPECTS 
-    an uManager data, 
+    an uManager data (single z), 
 SEGMENTS and ANALYZES
     SG properties (enables size, mean intensity, circularity and eccentricity) for single FOV based 
     on given position/time/channel/z-plane information,
@@ -59,7 +59,6 @@ save_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/202101
 data_p = 2
 data_t = 0
 data_c = 0
-data_z = 0
 thresholding = 'local-sg'  # only accepts 'na', 'otsu', 'yen', 'local-nucleoli' and 'local-sg'
 min_size = 5
 max_size = 350
@@ -95,7 +94,7 @@ cb.t(0).p(0).c(0).z(0)
 # ------------------------------
 print("### Image analysis: calculate SG mask/pd ...")
 # test image of position
-temp = store.get_image(cb.t(data_t).c(data_c).z(data_z).p(data_p).build())
+temp = store.get_image(cb.t(data_t).c(data_c).z(0).p(data_p).build())
 pix = np.reshape(temp.get_raw_pixels(), newshape=[temp.get_height(), temp.get_width()])
 
 sg = find_organelle(pix, thresholding, min_size=min_size, max_size=max_size)
