@@ -19,9 +19,9 @@ SEGMENTS and ANALYZES
     SG properties (enables size, mean intensity, circularity and eccentricity) for single FOV based 
     on given position/time/channel/z-plane information,
 EXPORTS 
-    measurements (including SG number, x, y position, size, mean intensity, circularity and eccentricity) 
-    in .txt format and images (raw image, SG mask, color coded mean intensity/circularity/eccentricity 
-    data) in .pdf format, 
+    measurements (including SG number, x, y position, size, mean intensity (without correction), 
+    circularity and eccentricity) in .txt format and images (raw image, SG mask, color coded mean 
+    intensity/circularity/eccentricity data) in .pdf format, 
 DISPLAYS 
     images (raw image, SG mask, color coded mean_intensity/circularity/eccentricity data) in napari. 
 
