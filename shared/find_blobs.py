@@ -6,6 +6,30 @@ from skimage.filters import threshold_otsu, threshold_yen, threshold_local
 import shared.objects as obj
 from shared.objects import remove_large
 
+"""
+# ---------------------------------------------------------------------------------------------------
+# FUNCTIONS for BLOB IDENTIFICATION
+# ---------------------------------------------------------------------------------------------------
+
+segment_watershed
+    FUNCTION: returns an np.array that is the segmented version of the input
+    SYNTAX:   segment_watershed(pixels: np.array, extreme_val: int, bg_val: int)
+
+find_blobs
+    FUNCTION: find blobs in image
+    SYNTAX:   find_blobs(pixels: np.array, binary_global: np.array, extreme_val: int, bg_val=200, 
+              max_size=1000)
+
+get_binary_global
+    FUNCTION: calculate binary global thresholding image
+    SYNTAX:   get_binary_global(pixels: np.array, threshold_method='na', min_size=5, max_size=1000)
+
+select
+    FUNCTION: selects subset of input dict
+    SYNTAX:   select(in_list: list, key, in_min: int, in_max: int)
+    
+"""
+
 
 def segment_watershed(pixels: np.array, extreme_val: int, bg_val: int):
     """
@@ -20,6 +44,7 @@ def segment_watershed(pixels: np.array, extreme_val: int, bg_val: int):
     markers = np.zeros_like(pixels)
     markers[pixels < bg_val] = 1
     markers[maxima == 1] = 2
+
     return segmentation.watershed(elevation_map, markers)
 
 
@@ -35,6 +60,7 @@ def find_blobs(pixels: np.array, binary_global: np.array, extreme_val: int, bg_v
     :param bg_val: used to define background for watershed
     :param max_size: maximum size of the blobs
     :return: segmented image of same size as input
+
     """
     if np.amax(pixels) < 1000:
         merge = np.zeros_like(pixels)
@@ -56,9 +82,15 @@ def get_binary_global(pixels: np.array, threshold_method='na', min_size=5, max_s
     :param pixels: np.array
     :param threshold_method: method used to perform global thresholding, enable 'na',
                 'otsu', 'yen', 'local-nucleoli' and 'local-sg'
+                'na': not applied, return a black image
+                'otsu': otsu thresholding + one round of erosion/dilation
+                'yen': yen thresholding + one round of erosion/dilation
+                'local-nucleoli': otsu & local thresholding for nucleoli identification
+                'local-sg': otsu & local thresholding for stress granule identification
     :param min_size: minimum size of blobs
     :param max_size: maximum size of blobs
     :return: out: 0-and-1 np.array, binary global thresholding image
+
     """
 
     check_lst = ['na', 'otsu', 'yen', 'local-nucleoli', 'local-sg']
