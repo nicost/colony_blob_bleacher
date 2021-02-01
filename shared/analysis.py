@@ -2,7 +2,7 @@ import numpy as np
 from skimage.feature import peak_local_max
 from skimage.filters import rank, threshold_triangle
 from skimage.morphology import disk, opening, dilation, binary_dilation
-from skimage.measure import label, regionprops_table
+from skimage.measure import label, regionprops_table, regionprops
 import shared.dataframe as dat
 import shared.objects as obj
 import pandas as pd
@@ -25,14 +25,18 @@ analysis_mask
     FUNCTION: generates a dilated mask from given points
     SYNTAX:   analysis_mask(x: list, y: list, pixels_same_size: np.array, num_dilation=3)
 
+get_intensity
+    FUNCTION: measure mean intensity time series for all given objects
+    SYNTAX:   get_intensity(obj: np.array, pixels_tseries: list)
+    
 get_bg_int
     FUNCTION: measure background intensities from a given movie
     SYNTAX:   get_bg_int(pixels_tseries: list)
-
+        
 bg_correction
     FUNCTION: background correction of time series intensities for multiple points
     SYNTAX:   bg_correction(int_tseries_multiple_points: list, bg_int_tseries: list)
- 
+     
 get_pb_factor
     FUNCTION: measure photobleaching factor from given time series intensities of multiple 
               control points
@@ -53,7 +57,6 @@ pix_stitch
     SYNTAX:   pix_stitch(pixels_pd: pd.DataFrame, num_col: int, num_row: int)
     
 """
-
 
 DEFAULT = object()
 
@@ -173,6 +176,32 @@ def analysis_mask(x: list, y: list, pixels_same_size: np.array, num_dilation=3):
         raise ValueError("Length of x: %d and y: %d does not match" % (len(x), len(y)))
 
     return out
+
+
+def get_intensity(object: np.array, pixels_tseries: list):
+    """
+    Measure mean intensity time series for all given objects
+
+    Usage examples:
+    1) measure bleach spots/ctrl spots intensity series
+
+    :param obj: np.array, 0-and-1 object mask
+    :param pixels_tseries: list, pixels time series
+                e.g. [pixels_t0, pixels_t1, pixels_t2, ...]
+    :return: obj_int_tseries: list
+                list of intensity time series
+    """
+
+    max_t = len(pixels_tseries)
+    obj_int_tseries = [[] for _ in range(obj.object_count(object))]
+
+    for t in range(0, max_t):
+        # measure mean intensity for objects
+        obj_props = regionprops(label(object, connectivity=1), pixels_tseries[t])
+        for i in range(len(obj_props)):
+            obj_int_tseries[i].append(obj_props[i].mean_intensity)
+
+    return obj_int_tseries
 
 
 def get_bg_int(pixels_tseries: list):
@@ -357,8 +386,8 @@ def pix_stitch_same_row(pixels_pd: pd.DataFrame, num_col: int):
     # concatenate the other images sequentially on the right side of the first image
     for i in range(num_col - 1):
         # if image exists, assign corresponding image
-        if (i+1) in pixels_pd['col'].tolist():
-            out = np.concatenate((out, pixels_pd[pixels_pd['col'] == i+1].iloc[0]['pix']), axis=1, out=None)
+        if (i + 1) in pixels_pd['col'].tolist():
+            out = np.concatenate((out, pixels_pd[pixels_pd['col'] == i + 1].iloc[0]['pix']), axis=1, out=None)
         # if not exist, assign empty image
         else:
             out = np.concatenate((out, np.zeros_like(pixels_pd.iloc[0]['pix'])), axis=1, out=None)
@@ -397,9 +426,8 @@ def pix_stitch(pixels_pd: pd.DataFrame, num_col: int, num_row: int):
     # first row
     out = pix_stitch_same_row(pixels_pd[pixels_pd['row'] == 0], num_col)
     # stitch the following rows beneath the first row
-    for i in range(num_row-1):
+    for i in range(num_row - 1):
         out = np.concatenate((out, pix_stitch_same_row(pixels_pd[pixels_pd['row'] == i + 1], num_col)),
                              axis=0, out=None)
 
     return out
-
