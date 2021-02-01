@@ -11,7 +11,8 @@ import os
 EXPECTS 
     two .txt measurements saved from sg_multi-FOV.py or sg_single-FOV.py, 
 EXPORTS 
-    histogram comparison between measurements (including size (log scale), mean intensity (log scale), 
+    histogram comparison between measurements (including size (log scale), mean intensity (without
+    correction, log scale), 
     circularity (only for size>50) and eccentricity) saved in .pdf format.
 
 # ----------------------------------
@@ -105,9 +106,9 @@ plt.subplots(figsize=(8, 6))
 sample_num = min([len(data1), len(data2)])
 hist_range = (6, 10)
 num_bin = 50
-plt.hist(np.log(data2['int'].sample(n=sample_num)), bins=num_bin, range=hist_range,
+plt.hist(np.log(data2['raw_int'].sample(n=sample_num)), bins=num_bin, range=hist_range,
          alpha=1.0, color=(0.85, 0.35, 0.25), label=sample_name2, edgecolor=(0.2, 0.2, 0.2))
-plt.hist(np.log(data1['int'].sample(n=sample_num)), bins=num_bin, range=hist_range,
+plt.hist(np.log(data1['raw_int'].sample(n=sample_num)), bins=num_bin, range=hist_range,
          alpha=0.5, color=(0.8, 0.8, 0.8), label=sample_name1, edgecolor=(0.2, 0.2, 0.2))
 plt.xlabel('ln(Intensity(AU))')
 plt.ylabel('Counts')
