@@ -1,7 +1,7 @@
 import numpy as np
 from skimage.feature import peak_local_max
 from skimage.filters import rank, threshold_triangle
-from skimage.morphology import disk, opening, dilation, binary_dilation
+from skimage.morphology import disk, opening, dilation, binary_dilation, binary_erosion
 from skimage.measure import label, regionprops_table, regionprops
 import shared.dataframe as dat
 import shared.objects as obj
@@ -234,6 +234,11 @@ def get_bg_int(pixels_tseries: list):
         # get regions whose pixel intensity < 300
         bg = np.zeros_like(pixels_tseries[i])
         bg[pixels_tseries[i] < 300] = 1
+        # smooth region
+        bg = binary_dilation(bg)
+        bg = binary_dilation(bg)
+        bg = binary_erosion(bg)
+        bg = binary_erosion(bg)
         # remove regions < 50
         bg = obj.remove_small(bg, 50)
         # measure bg object properties
@@ -249,8 +254,7 @@ def get_bg_int(pixels_tseries: list):
             bg_int_tseries.append(bg_prop_pd['mean_intensity'][0])
         else:
             # find the mean_intensity of the largest area
-            max_area = max(bg_prop_pd['area'])
-            bg_int_temp = bg_prop_pd[bg_prop_pd['area'] == max_area]['mean_intensity'][0]
+            bg_int_temp = bg_prop_pd[bg_prop_pd.area == bg_prop_pd.area.max()]['mean_intensity'][0]
             bg_int_tseries.append(bg_int_temp)
 
     return bg_int_tseries
