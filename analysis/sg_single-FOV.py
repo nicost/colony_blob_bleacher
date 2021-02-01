@@ -2,7 +2,7 @@ import numpy as np
 import napari
 from pycromanager import Bridge
 from matplotlib import pyplot as plt
-from shared.find_organelles import sg_analysis, find_organelle
+from shared.find_organelles import organelle_analysis, find_organelle
 import shared.display as dis
 from skimage.measure import label
 import shared.objects as obj
@@ -52,8 +52,8 @@ DISPLAYS
 # PARAMETERS ALLOW CHANGE
 # --------------------------
 # paths
-data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/SG_scoring/WT"
-save_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/SG_scoring/dataAnalysis"
+data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/20210100_SG_scoring/WT"
+save_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/20210100_SG_scoring/dataAnalysis1"
 
 # values for analysis
 data_p = 2
@@ -99,7 +99,8 @@ temp = store.get_image(cb.t(data_t).c(data_c).z(data_z).p(data_p).build())
 pix = np.reshape(temp.get_raw_pixels(), newshape=[temp.get_height(), temp.get_width()])
 
 sg = find_organelle(pix, thresholding, min_size=min_size, max_size=max_size)
-sg_pd = sg_analysis(pix, sg, 0)
+label_sg = label(sg, connectivity=1)
+sg_pd = organelle_analysis(pix, sg, 'sg', 0)
 
 # --------------------------
 # COLOR CODED IMAGES
@@ -109,19 +110,19 @@ print("### Calculate color coded circ/ecce/int image ...")
 cmap1 = 'YlOrRd'
 cmap1_napari = dis.num_color_colormap(cmap1, 255)[0]
 cmap1_plt = dis.num_color_colormap(cmap1, 255)[1]
-sg_circ = obj.obj_display_in_circularity(sg)
+sg_circ = obj.obj_display_in_circularity(label_sg)
 
 # ecce image
 cmap2 = 'Blues'
 cmap2_napari = dis.num_color_colormap(cmap2, 255)[0]
 cmap2_plt = dis.num_color_colormap(cmap2, 255)[1]
-sg_ecce = obj.obj_display_in_eccentricity(sg)
+sg_ecce = obj.obj_display_in_eccentricity(label_sg)
 
 # int image
 cmap3 = 'viridis'
 cmap3_napari = dis.num_color_colormap(cmap3, 255)[0]
 cmap3_plt = dis.num_color_colormap(cmap3, 255)[1]
-sg_int = obj.obj_display_in_intensity(sg, pix, [6, 10])
+sg_int = obj.obj_display_in_intensity(label_sg, pix, [6, 10])
 
 # --------------------------
 # OUTPUT
