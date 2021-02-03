@@ -33,6 +33,11 @@ Math related:
     double_exp
         EQUATION: y = a1 + a2 - a1 * np.exp(-b1 * t) - a2 * np.exp(-b2 * t)
         SYNTAX:   double_exp(t, a1, a2, b1, b2)
+        
+    ellenberg
+        EQUATION: y = a * (1 - (w ** 2 / (w ** 2 + 4 * math.pi * d * t)) ** 0.5)
+                  w = 0.5
+        SYNTAX:   ellenberg(t, a, d)
 
 Statistics:
     
@@ -56,7 +61,7 @@ Fitting related:
     
     frap_fitting_single_exp
         FUNCTION: perform single exponential fitting for FRAP curves
-        SYNTAX:   frap_fitting_single_exp(time_tseries_lst: list, frap_lst: list)
+        SYNTAX:   frap_fitting_single_exp(time_tseries_lst: list, frap_lst: list, sigma_lst: list)
     
     frap_fitting_soumpasis
         FUNCTION: perform soumpasis fitting for FRAP curves
@@ -65,7 +70,18 @@ Fitting related:
     frap_fitting_double_exp
         FUNCTION: perform double exponential fitting for FRAP curves
         SYNTAX:   frap_fitting_double_exp(time_tseries_lst: list, frap_lst: list, sigma_lst: list)
-        
+    
+    frap_fitting_ellenberg
+        FUNCTION: perform ellenberg fitting for FRAP curves
+        SYNTAX:   frap_fitting_ellenberg(time_tseries_lst: list, frap_lst: list, sigma_lst: list)
+    
+    find_optimal_fitting
+        FUNCTION: find the best fit from the given function options
+        SYNTAX:   find_optimal_fitting(pointer_pd: pd.DataFrame, compare_functions: list)
+    
+    frap_fitting_linear
+        FUNCTION: fit initial part of FRAP curve with linear function to identify initial slope
+        SYNTAX:   frap_fitting_linear(time_tseries_lst: list, frap_lst: list)
         
 """
 
@@ -572,6 +588,14 @@ def frap_fitting_ellenberg(time_tseries_lst: list, frap_lst: list, sigma_lst: li
 
 
 def find_optimal_fitting(pointer_pd: pd.DataFrame, compare_functions: list):
+    """
+    Find the best fit from the given function options
+
+    :param pointer_pd: pd.DataFrame
+    :param compare_functions: list
+                e.g. ['single_exp', 'soumpasis', 'ellenberg', 'double_exp']
+    :return:
+    """
     optimal_function = []
     optimal_fit = []
     optimal_r2 = []
@@ -615,6 +639,13 @@ def find_optimal_fitting(pointer_pd: pd.DataFrame, compare_functions: list):
 
 
 def frap_fitting_linear(time_tseries_lst: list, frap_lst: list):
+    """
+    Fit initial part of FRAP curve with linear function to identify initial slope
+
+    :param time_tseries_lst:
+    :param frap_lst:
+    :return:
+    """
     linear_fit = []
     linear_a = []
     linear_b = []
