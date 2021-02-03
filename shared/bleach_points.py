@@ -33,7 +33,7 @@ pd.DataFrame related:
     
     frap_filter
         FUNCTION: filter FRAP curves
-        SYNTAX:   frap_filter(pointer_pd: pd.DataFrame)
+        SYNTAX:   frap_filter(pointer_pd: pd.DataFrame, f: str)
     
 """
 
