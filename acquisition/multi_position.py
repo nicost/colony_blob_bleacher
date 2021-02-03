@@ -13,6 +13,8 @@ from shared.find_organelles import find_organelle
 
 nr = 40
 nr_between_projector_checks = 2
+cal_exposure = 200
+cal_offset = 5
 
 # build up pycromanager bridge
 bridge = Bridge()
@@ -52,14 +54,15 @@ def snap_and_get_bleach_location(exposure, cutoff):
         measured_location = bleach_location(pre_np_img, post_np_img, location, [100, 100])
         offset = (measured_location[0] - location[0], measured_location[1] - location[1])
         print(offset)
-        calibrated = False
+        cal = False
         if offset[0] * offset[0] + offset[1] * offset[1] > cutoff:
             projector.calibrate(True)
-            calibrated = True
+            cal = True
+            print("Calibrated")
         projector.set_exposure(projector_device, p_exposure)
         mmc.set_exposure(c_exposure)
         mm.shutter().set_auto_shutter(auto_shutter)
-        return calibrated, offset[0] * offset[0] + offset[1] * offset[1]
+        return cal, offset[0] * offset[0] + offset[1] * offset[1]
     return False, -1
 
 
@@ -77,7 +80,7 @@ for idx in range(pos_list.get_number_of_positions()):
     pos.go_to_position(pos, mmc)
     time.sleep(0.1)
     if count >= nr_between_projector_checks:
-        calibrated, error = snap_and_get_bleach_location(200, 4)
+        calibrated, error = snap_and_get_bleach_location(cal_exposure, cal_offset)
         if error < 0:
             count -= 1
         else:
