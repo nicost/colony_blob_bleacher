@@ -3,6 +3,7 @@ import pandas as pd
 import napari
 from pycromanager import Bridge
 from matplotlib.backends.qt_compat import QtCore, QtWidgets
+
 if QtCore.qVersion() >= "5.":
     from matplotlib.backends.backend_qt5agg import FigureCanvas
 else:
@@ -64,7 +65,7 @@ DISPLAYS
     # paths
     data_path: directory of uManager data
     save_path: primary directory for output saving
-    
+
     # values for analysis
     data_c: channel to be analyzed
     pos: position of the given FOV in multi-image dataset, default = 0
@@ -74,7 +75,7 @@ DISPLAYS
     max_size: the largest allowable nucleoli size
     num_dilation: number of dilation used to generate bleach spots, determines size of bleach spots
         default = 3
-    
+
     # modes
     mode_bleach_detection: bleach spots detection modes; only accept 'single-raw' or 'single-offset'
     display_mode: displays stitched images in napari or not; only accepts 'N' or 'Y'
@@ -87,9 +88,9 @@ DISPLAYS
 # paths
 # data_path = "C:\\Users\\NicoLocal\\Images\\Jess\\20201116-Nucleoli-bleaching-4x\\PythonAcq1\\AutoBleach_15"
 data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/" \
-            "20201216_CBB_nucleoliBleachingTest_drugTreatment/Ctrl-2DG-CCCP-36pos_partial/exp_111/"
+            "20201216_CBB_nucleoliBleachingTest_drugTreatment/Ctrl-2DG-CCCP-36pos_partial/exp_110/"
 save_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/" \
-            "20201216_CBB_nucleoliBleachingTest_drugTreatment/Ctrl-2DG-CCCP-36pos_partial/exp_111/"
+            "20201216_CBB_nucleoliBleachingTest_drugTreatment/Ctrl-2DG-CCCP-36pos_partial/exp_110/"
 
 # values for analysis
 data_c = 0
@@ -98,13 +99,13 @@ thresholding = 'local-nucleoli'
 # global thresholding method; choose in between 'na','otsu','yen', 'local-nucleoli' and 'local-sg'
 min_size = 10  # minimum nucleoli size; default = 10
 max_size = 1000  # maximum nucleoli size; default = 1000;
-                 # larger ones are generally cells without nucleoli
+# larger ones are generally cells without nucleoli
 num_dilation = 3  # number of dilation from the coordinate;
-                  # determines analysis size of the analysis spots; default = 3
+# determines analysis size of the analysis spots; default = 3
 
 # modes
 mode_bleach_detection = 'single-offset'  # only accepts 'single-raw' or 'single-offset'
-display_mode = 'N'  # only accepts 'N' or 'Y'
+display_mode = 'Y'  # only accepts 'N' or 'Y'
 
 """
 # ---------------------------------------------------------------------------------------------------
@@ -247,9 +248,11 @@ if num_ctrl_spots != 0:
     # pb_factor fitting with single exponential decay
     pb_fit = mat.fitting_single_exp_decay(np.arange(0, len(pb_factor), 1), pb_factor)
     pointer_pd = dat.add_columns(pointer_pd, ['pb_single_exp_decay_fit', 'pb_single_exp_decay_r2',
-                                              'pb_single_exp_decay_a', 'pb_single_exp_decay_b'],
+                                              'pb_single_exp_decay_a', 'pb_single_exp_decay_b',
+                                              'pb_single_exp_decay_c'],
                                  [[pb_fit[0]] * len(pointer_pd), [pb_fit[1]] * len(pointer_pd),
-                                  [pb_fit[2]] * len(pointer_pd), [pb_fit[3]] * len(pointer_pd)])
+                                  [pb_fit[2]] * len(pointer_pd), [pb_fit[3]] * len(pointer_pd),
+                                  [pb_fit[4]] * len(pointer_pd)])
 
     # photobleaching correction
     if np.isnan(pb_fit[2]):
@@ -262,13 +265,46 @@ if num_ctrl_spots != 0:
 frap_pd = ble.frap_analysis(pointer_pd, max_t, acquire_time_tseries, real_time)
 pointer_pd = pd.concat([pointer_pd, frap_pd], axis=1)
 
+# --------------------------------------------------
+# FRAP CURVE FITTING
+# --------------------------------------------------
+
+# curve fitting with linear to determine initial slope
+linear_fit_pd = mat.frap_fitting_linear(pointer_pd['real_time_post'], pointer_pd['int_curve_post_nor'])
+pointer_pd = pd.concat([pointer_pd, linear_fit_pd], axis=1)
+
 # curve fitting with single exponential function
-frap_fit_pd = mat.frap_fitting_single_exp(pointer_pd['real_time_post'], pointer_pd['int_curve_post_nor'])
-pointer_pd = pd.concat([pointer_pd, frap_fit_pd], axis=1)
+single_exp_fit_pd = mat.frap_fitting_single_exp(pointer_pd['real_time_post'],
+                                                pointer_pd['int_curve_post_nor'], pointer_pd['sigma'])
+pointer_pd = pd.concat([pointer_pd, single_exp_fit_pd], axis=1)
+
+# curve fitting with soumpasis function
+soumpasis_fit_pd = mat.frap_fitting_soumpasis(pointer_pd['real_time_post'],
+                                              pointer_pd['int_curve_post_nor'], pointer_pd['sigma'])
+pointer_pd = pd.concat([pointer_pd, soumpasis_fit_pd], axis=1)
+
+# curve fitting with double exponential function
+double_exp_fit_pd = mat.frap_fitting_double_exp(pointer_pd['real_time_post'],
+                                                pointer_pd['int_curve_post_nor'], pointer_pd['sigma'])
+pointer_pd = pd.concat([pointer_pd, double_exp_fit_pd], axis=1)
+
+# curve fitting with ellenberg function
+ellenberg_fit_pd = mat.frap_fitting_ellenberg(pointer_pd['real_time_post'],
+                                              pointer_pd['int_curve_post_nor'], pointer_pd['sigma'])
+pointer_pd = pd.concat([pointer_pd, ellenberg_fit_pd], axis=1)
+
+# find optimal fitting
+optimal_fit_pd = mat.find_optimal_fitting(pointer_pd, ['single_exp', 'soumpasis', 'ellenberg', 'double_exp'])
+pointer_pd = pd.concat([pointer_pd, optimal_fit_pd], axis=1)
 
 # filter frap curves
-pointer_pd = ble.frap_filter(pointer_pd)
-pointer_ft_pd = pointer_pd[pointer_pd['frap_filter'] == 1]
+pointer_pd['frap_filter_single_exp'] = ble.frap_filter(pointer_pd, 'single_exp')
+pointer_pd['frap_filter_soumpasis'] = ble.frap_filter(pointer_pd, 'soumpasis')
+pointer_pd['frap_filter_double_exp'] = ble.frap_filter(pointer_pd, 'double_exp')
+pointer_pd['frap_filter_ellenberg'] = ble.frap_filter(pointer_pd, 'ellenberg')
+pointer_pd['frap_filter_optimal'] = ble.frap_filter(pointer_pd, 'optimal')
+
+pointer_ft_pd = pointer_pd[pointer_pd['frap_filter_optimal'] == 1]
 data_log['num_frap_curves'] = [len(pointer_ft_pd)]
 print("%d spots passed filters for FRAP curve quality control." % data_log['num_frap_curves'][0])
 
@@ -309,13 +345,13 @@ pointer_out = pd.DataFrame({'bleach_spots': pointer_ft_pd['bleach_spots'],
 pointer_out.to_csv('%s/data.txt' % storage_path, index=False, sep='\t')
 
 # images
-dis.plot_offset_map(pointer_pd, storage_path)  # offset map
-dis.plot_raw_intensity(pointer_pd, ctrl_pd, storage_path)  # raw intensity
-dis.plot_pb_factor(pointer_pd, storage_path)  # photobleaching factor
-dis.plot_corrected_intensity(pointer_pd, storage_path)  # intensity after dual correction
-dis.plot_normalized_frap(pointer_pd, storage_path)  # normalized FRAP curves
-dis.plot_frap_fitting(pointer_pd, storage_path)  # normalized FRAP curves after filtering with fitting
-                                            # individual normalized FRAP curves with fitting
+#dis.plot_offset_map(pointer_pd, storage_path)  # offset map
+#dis.plot_raw_intensity(pointer_pd, ctrl_pd, storage_path)  # raw intensity
+#dis.plot_pb_factor(pointer_pd, storage_path)  # photobleaching factor
+#dis.plot_corrected_intensity(pointer_pd, storage_path)  # intensity after dual correction
+#dis.plot_normalized_frap(pointer_pd, storage_path)  # normalized FRAP curves
+#dis.plot_frap_fitting(pointer_pd, storage_path)  # normalized FRAP curves after filtering with fitting
+# individual normalized FRAP curves with fitting
 
 # --------------------------
 # OUTPUT DISPLAY
@@ -376,7 +412,7 @@ if display_mode == 'Y':
         # Plot-middle: FRAP curves of filtered analysis spots after intensity correction
         # relative intensity, bleach time zero aligned
         for i in range(len(pointer_sort)):
-            if pointer_sort['frap_filter'][i] == 1:
+            if pointer_sort['frap_filter_single_exp'][i] == 1:
                 ax2.plot(pointer_sort['real_time_post'][i], pointer_sort['int_curve_post_nor'][i],
                          color=cmap2_rgba[i + 1], alpha=0.5)
                 ax2.plot(pointer_sort['real_time_post'][i], pointer_sort['single_exp_fit'][i], '--',
@@ -385,7 +421,7 @@ if display_mode == 'Y':
         ax2.set_xlabel('time (sec)')
         ax2.set_ylabel('intensity')
 
-        # Plot-right: offset
+        """# Plot-right: offset
         if mode_bleach_detection == 'single-offset':
             for i in range(len(pointer_sort)):
                 ax3.plot([0, pointer_sort['x_diff'][i]], [0, pointer_sort['y_diff'][i]],
@@ -394,4 +430,14 @@ if display_mode == 'Y':
             ax3.set_ylim([-10, 10])
             ax3.set_title('Offset map')
             ax3.set_xlabel('x offset')
-            ax3.set_ylabel('y offset')
+            ax3.set_ylabel('y offset')"""
+
+        for i in range(len(pointer_sort)):
+            if pointer_sort['frap_filter_optimal'][i] == 1:
+                ax3.plot(pointer_sort['real_time_post'][i], pointer_sort['int_curve_post_nor'][i],
+                         color=cmap2_rgba[i + 1], alpha=0.5)
+                ax3.plot(pointer_sort['real_time_post'][i], pointer_sort['linear_fit'][i], '--',
+                         color=cmap2_rgba[i + 1])
+        ax3.set_title('FRAP curves')
+        ax3.set_xlabel('time (sec)')
+        ax3.set_ylabel('intensity')
