@@ -223,6 +223,24 @@ def filter_bleach_spots(log_pd: pd.DataFrame):
     return pointer_pd
 
 
+def get_t_half(half_int: float or int, int_tseries: list, real_time_post: list):
+    """
+    Calculate t_half from half intensity
+
+    :param half_int:
+    :param int_tseries:
+    :param real_time_post:
+    :return:
+    """
+    half_frame = dat.find_pos(half_int, int_tseries)
+    if half_frame == len(real_time_post):
+        t_half = np.nan
+    else:
+        t_half = real_time_post[half_frame]
+
+    return t_half
+
+
 def frap_analysis(pointer_pd: pd.DataFrame, max_t: int, acquire_time_tseries: list, real_time: list):
     """
     Analyze FRAP curve
@@ -269,6 +287,7 @@ def frap_analysis(pointer_pd: pd.DataFrame, max_t: int, acquire_time_tseries: li
     t_int_post = []  # intensity series after minimum intensity (includes min_int_frame, frap recovery curve)
     imaging_length = []  # number of frames of t_int_post
     t_int_pre = []  # intensity series before photobleaching (without bleach_frame, before spike)
+    sigma_lst = []  # constant measurement error: standard deviation of pre_bleach intensities
     pre_bleach_int = []  # mean intensity before photobleaching; pre-bleach intensity
     frap_start_int = []  # frap start intensity after photobleaching
     t_int_post_nor = []  # t_int_post normalized with pre_bleach_int and min_int
@@ -276,10 +295,6 @@ def frap_analysis(pointer_pd: pd.DataFrame, max_t: int, acquire_time_tseries: li
     mean_int_nor = []  # intensity series normalized with pre_bleach_int and min_int
     plateau_int = []  # plateau level intensity
     plateau_int_nor = []  # int_plateau normalized with pre_bleach_int and min_int; mobile fraction
-    immobile_fraction = []  # 1-plateau_int_nor
-    half_int = []  # half intensity
-    half_int_nor = []  # int_half normalized with pre_bleach_int and min_int
-    half_frame = []  # number of frames it takes to reach half intensity (min_int_frame, half_int_frame]
     t_half = []  # t-half
     slope = []  # initial slope of the recovery curve (relative intensity)
 
@@ -298,7 +313,8 @@ def frap_analysis(pointer_pd: pd.DataFrame, max_t: int, acquire_time_tseries: li
         t_int_pre.append(int_pre)
         t_int_post.append(int_post)
         # time series represents in sec
-        real_time_post.append([x - real_time[-num_post] for x in real_time[-num_post:]])
+        real_time_post_temp = [x - real_time[-num_post] for x in real_time[-num_post:]]
+        real_time_post.append(real_time_post_temp)
         # mean intensity before photobleaching
         pre_bleach_int_temp = np.mean(int_pre)
         pre_bleach_int.append(pre_bleach_int_temp)
@@ -307,7 +323,12 @@ def frap_analysis(pointer_pd: pd.DataFrame, max_t: int, acquire_time_tseries: li
         frap_start_int.append(frap_start_int_temp)
         # normalized intensities after min_intensity based on pre_bleach_int and min_int
         full_range_int = pre_bleach_int_temp - frap_start_int_temp
-        t_int_post_nor.append([(x - frap_start_int_temp) / full_range_int for x in int_post])
+        int_post_nor = [(x - frap_start_int_temp) / full_range_int for x in int_post]
+        t_int_post_nor.append(int_post_nor)
+        # constant measurement error: standard deviation of pre_bleach intensities
+        int_pre_nor = [(x - frap_start_int_temp) / full_range_int for x in int_pre]
+        sigma = np.std(int_pre_nor)
+        sigma_lst.append(sigma)
         # intensity normalized based on pre_bleach_int and min_int
         mean_int_nor_temp = [(x - frap_start_int_temp) / full_range_int for x in pointer_pd['mean_int'][i]]
         mean_int_nor.append(mean_int_nor_temp)
@@ -316,19 +337,8 @@ def frap_analysis(pointer_pd: pd.DataFrame, max_t: int, acquire_time_tseries: li
         plateau_int.append(plateau_int_temp)
         plateau_int_nor_temp = (plateau_int_temp - frap_start_int_temp) / full_range_int
         plateau_int_nor.append(plateau_int_nor_temp)
-        immobile_fraction_temp = 1 - plateau_int_nor_temp
-        immobile_fraction.append(immobile_fraction_temp)
-        # half intensity
-        half_int_temp = 0.5 * (frap_start_int_temp + plateau_int_temp)
-        half_int.append(half_int_temp)
-        half_int_nor_temp = (half_int_temp - frap_start_int_temp) / full_range_int
-        half_int_nor.append(half_int_nor_temp)
-        # number of frames it take to reach half intensity
-        half_frame_temp = dat.find_pos(half_int_temp, int_post)
-        half_frame.append(half_frame_temp)
         # t_half (sec)
-        t_half_temp = dat.get_time_length(frap_start_frame_temp,
-                                          frap_start_frame_temp + half_frame_temp, acquire_time_tseries)
+        t_half_temp = get_t_half(plateau_int_nor_temp/2, int_post_nor, real_time_post_temp)
         t_half.append(t_half_temp)
         # initial slope calculated based on first 5 frames
         int_change = (pointer_pd['mean_int'][i][frap_start_frame_temp + 5] - frap_start_int_temp) / full_range_int
@@ -343,21 +353,18 @@ def frap_analysis(pointer_pd: pd.DataFrame, max_t: int, acquire_time_tseries: li
                             'int_curve_post': t_int_post,
                             'int_curve_post_nor': t_int_post_nor,
                             'real_time_post': real_time_post,
+                            'sigma': sigma_lst,
                             'pre_bleach_int': pre_bleach_int,
                             'frap_start_int': frap_start_int,
                             'plateau_int': plateau_int,
                             'mobile_fraction': plateau_int_nor,
-                            'immobile_fraction': immobile_fraction,
-                            'half_int': half_int,
-                            'half_int_nor': half_int_nor,
-                            'half_frame': half_frame,
                             't_half': t_half,
                             'ini_slope': slope})
 
     return frap_pd
 
 
-def frap_filter(pointer_pd: pd.DataFrame):
+def frap_filter(pointer_pd: pd.DataFrame, f: str):
     """
     Filter FRAP curves
 
@@ -366,48 +373,26 @@ def frap_filter(pointer_pd: pd.DataFrame):
     2) total imaging length < 150
     3) does not find optional fit (single exponential)
     4) mobile fraction < 0 or mobile fraction > 1.5
-    5) r2 of fit < 0.5
+    5) r2 of fit < 0.7
 
-    :param pointer_pd: pd.DataFrame, requires columns 'bleach_frame', 'imaging_length', 'single_exp_a',
-                'single_exp_r2'
-
-                'bleach_frame': photobleaching frame
-                'imaging_length': number of frames of FRAP curves
-                'single_exp_a': parameter a of FRAP curve single exponential fit (a * (1 - np.exp(-b * x)))
-                'single_exp_r2': r square of FRAP curve single exponential fit (a * (1 - np.exp(-b * x)))
+    :param pointer_pd: pd.DataFrame
+    :param f: filter based on which function
     :return: pointer_pd: pd.DataFrame, add one column 'frap_filter'
                 'frap_filter': FRAP curve filtering result
                     1: passed
                     0: not passed
 
     """
-
     frap_flt = []
     for i in range(len(pointer_pd)):
         if (pointer_pd['bleach_frame'][i] < 5) \
                 | (pointer_pd['imaging_length'][i] < 150) \
-                | (np.isnan(pointer_pd['single_exp_a'][i])) \
-                | (pointer_pd['single_exp_a'][i] < 0) \
-                | (pointer_pd['single_exp_a'][i] >= 1.5) \
-                | (pointer_pd['single_exp_r2'][i] < 0.5):
+                | (np.isnan(pointer_pd['%s_r2' % f][i])) \
+                | (pointer_pd['%s_mobile_fraction' % f][i] < 0) \
+                | (pointer_pd['%s_mobile_fraction' % f][i] >= 1.5) \
+                | (pointer_pd['%s_r2' % f][i] < 0.7):
             frap_flt.append(0)
         else:
             frap_flt.append(1)
-    pointer_pd['frap_filter'] = frap_flt
-    print("%d FRAP curves: less than 5 frames before photobleaching."
-          % len(pointer_pd[pointer_pd['bleach_frame'] < 5]))
-    print("%d FRAP curves: less than 150 frames in total."
-          % len(pointer_pd[(pointer_pd['bleach_frame'] >= 5) & (pointer_pd['imaging_length'] < 150)]))
-    print("%d FRAP curves: no optimal single exponential fit."
-          % len(pointer_pd[(pointer_pd['bleach_frame'] >= 5) & (pointer_pd['imaging_length'] >= 150)
-                           & (np.isnan(pointer_pd['single_exp_a']))]))
-    print("%d FRAP curves: mobile fraction < 0 or >= 1.5."
-          % len(pointer_pd[(pointer_pd['bleach_frame'] >= 5) & (pointer_pd['imaging_length'] >= 150)
-                           & (~np.isnan(pointer_pd['single_exp_a']))
-                           & ((pointer_pd['single_exp_a'] < 0) | (pointer_pd['single_exp_a'] >= 1.5))]))
-    print("%d FRAP curves: r square of single exponential fit < 0.5"
-          % len(pointer_pd[(pointer_pd['bleach_frame'] >= 5) & (pointer_pd['imaging_length'] >= 150)
-                           & (~np.isnan(pointer_pd['single_exp_a'])) & (pointer_pd['single_exp_a'] > 0)
-                           & (pointer_pd['single_exp_a'] < 1.5) & (pointer_pd['single_exp_r2'] < 0.5)]))
 
-    return pointer_pd
+    return frap_flt
