@@ -345,12 +345,12 @@ pointer_out = pd.DataFrame({'bleach_spots': pointer_ft_pd['bleach_spots'],
 pointer_out.to_csv('%s/data.txt' % storage_path, index=False, sep='\t')
 
 # images
-#dis.plot_offset_map(pointer_pd, storage_path)  # offset map
-#dis.plot_raw_intensity(pointer_pd, ctrl_pd, storage_path)  # raw intensity
-#dis.plot_pb_factor(pointer_pd, storage_path)  # photobleaching factor
-#dis.plot_corrected_intensity(pointer_pd, storage_path)  # intensity after dual correction
-#dis.plot_normalized_frap(pointer_pd, storage_path)  # normalized FRAP curves
-#dis.plot_frap_fitting(pointer_pd, storage_path)  # normalized FRAP curves after filtering with fitting
+dis.plot_offset_map(pointer_pd, storage_path)  # offset map
+dis.plot_raw_intensity(pointer_pd, ctrl_pd, storage_path)  # raw intensity
+dis.plot_pb_factor(pointer_pd, storage_path)  # photobleaching factor
+dis.plot_corrected_intensity(pointer_pd, storage_path)  # intensity after dual correction
+dis.plot_normalized_frap(pointer_pd, storage_path)  # normalized FRAP curves
+dis.plot_frap_fitting(pointer_pd, storage_path)  # normalized FRAP curves after filtering with fitting
 # individual normalized FRAP curves with fitting
 
 # --------------------------
@@ -412,16 +412,16 @@ if display_mode == 'Y':
         # Plot-middle: FRAP curves of filtered analysis spots after intensity correction
         # relative intensity, bleach time zero aligned
         for i in range(len(pointer_sort)):
-            if pointer_sort['frap_filter_single_exp'][i] == 1:
+            if pointer_sort['frap_filter_optimal'][i] == 1:
                 ax2.plot(pointer_sort['real_time_post'][i], pointer_sort['int_curve_post_nor'][i],
                          color=cmap2_rgba[i + 1], alpha=0.5)
-                ax2.plot(pointer_sort['real_time_post'][i], pointer_sort['single_exp_fit'][i], '--',
+                ax2.plot(pointer_sort['real_time_post'][i], pointer_sort['optimal_fit'][i], '--',
                          color=cmap2_rgba[i + 1])
         ax2.set_title('FRAP curves')
         ax2.set_xlabel('time (sec)')
         ax2.set_ylabel('intensity')
 
-        """# Plot-right: offset
+        # Plot-right: offset
         if mode_bleach_detection == 'single-offset':
             for i in range(len(pointer_sort)):
                 ax3.plot([0, pointer_sort['x_diff'][i]], [0, pointer_sort['y_diff'][i]],
@@ -430,14 +430,4 @@ if display_mode == 'Y':
             ax3.set_ylim([-10, 10])
             ax3.set_title('Offset map')
             ax3.set_xlabel('x offset')
-            ax3.set_ylabel('y offset')"""
-
-        for i in range(len(pointer_sort)):
-            if pointer_sort['frap_filter_optimal'][i] == 1:
-                ax3.plot(pointer_sort['real_time_post'][i], pointer_sort['int_curve_post_nor'][i],
-                         color=cmap2_rgba[i + 1], alpha=0.5)
-                ax3.plot(pointer_sort['real_time_post'][i], pointer_sort['linear_fit'][i], '--',
-                         color=cmap2_rgba[i + 1])
-        ax3.set_title('FRAP curves')
-        ax3.set_xlabel('time (sec)')
-        ax3.set_ylabel('intensity')
+            ax3.set_ylabel('y offset')
