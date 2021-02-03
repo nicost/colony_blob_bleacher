@@ -159,7 +159,7 @@ def plot_offset_map(pointer_pd: pd.DataFrame, storage_path: str):
     n = 0
     plt.subplots(figsize=(6, 4))
     for i in range(len(pointer_pd)):
-        if pointer_pd['frap_filter'][i] == 0:
+        if pointer_pd['frap_filter_optimal'][i] == 0:
             if m == 0:
                 plt.plot([0, pointer_pd['x_diff'][i]], [0, pointer_pd['y_diff'][i]], color='#1E90FF', alpha=0.5,
                          label='filtered ones')
@@ -217,7 +217,7 @@ def plot_raw_intensity(pointer_pd: pd.DataFrame, ctrl_pd: pd.DataFrame, storage_
         else:
             plt.plot(ctrl_pd['raw_int'][i], color=(0.7, 0.7, 0.7), alpha=0.5)
     for i in range(len(pointer_pd)):
-        if pointer_pd['frap_filter'][i] == 0:
+        if pointer_pd['frap_filter_optimal'][i] == 0:
             if m == 0:
                 plt.plot(pointer_pd['raw_int'][i], color='#1E90FF', alpha=0.7, label='filtered ones')
                 m = m + 1
@@ -277,7 +277,7 @@ def plot_corrected_intensity(pointer_pd: pd.DataFrame, storage_path: str):
     n = 0
     plt.subplots(figsize=(6, 4))
     for i in range(len(pointer_pd)):
-        if pointer_pd['frap_filter'][i] == 0:
+        if pointer_pd['frap_filter_optimal'][i] == 0:
             if m == 0:
                 plt.plot(pointer_pd['mean_int'][i], color='#1E90FF', alpha=0.7, label='filtered ones')
                 m = m + 1
@@ -313,7 +313,7 @@ def plot_normalized_frap(pointer_pd: pd.DataFrame, storage_path: str):
     n = 0
     plt.subplots(figsize=(6, 4))
     for i in range(len(pointer_pd)):
-        if pointer_pd['frap_filter'][i] == 0:
+        if pointer_pd['frap_filter_optimal'][i] == 0:
             if m == 0:
                 plt.plot(pointer_pd['real_time_post'][i], pointer_pd['int_curve_post_nor'][i],
                          color='#1E90FF', alpha=0.7, label='filtered ones')
@@ -356,24 +356,44 @@ def plot_frap_fitting(pointer_pd: pd.DataFrame, storage_path: str):
     """
     cmap1 = 'viridis'
     cmap1_rgba = num_color_colormap(cmap1, len(pointer_pd))[2]
+    cmap2_rgba = num_color_colormap(cmap1, 6)[2]
     plt.subplots(figsize=(6, 4))
     for i in range(len(pointer_pd)):
-        if pointer_pd['frap_filter'][i] == 1:
+        if pointer_pd['frap_filter_optimal'][i] == 1:
             plt.plot(pointer_pd['real_time_post'][i], pointer_pd['int_curve_post_nor'][i],
                      color=cmap1_rgba[i + 1], alpha=0.7)
-            plt.plot(pointer_pd['real_time_post'][i], pointer_pd['single_exp_fit'][i], '--',
+            plt.plot(pointer_pd['real_time_post'][i], pointer_pd['optimal_fit'][i], '--',
                      color=cmap1_rgba[i + 1], alpha=0.7)
     plt.xlabel('time (s)')
     plt.ylabel('normalized intensity (AU)')
     plt.savefig('%s/normalized_frap_curves_filtered.pdf' % storage_path)
 
     for i in range(len(pointer_pd)):
-        if pointer_pd['frap_filter'][i] == 1:
-            plt.subplots(figsize=(6, 4))
+        plt.subplots(figsize=(6, 4))
+        if pointer_pd['frap_filter_optimal'][i] == 1:
             plt.plot(pointer_pd['real_time_post'][i], pointer_pd['int_curve_post_nor'][i],
-                     color=cmap1_rgba[i + 1], alpha=0.7)
+                     color=(0.85, 0.35, 0.25), alpha=0.7)
+        else:
+            plt.plot(pointer_pd['real_time_post'][i], pointer_pd['int_curve_post_nor'][i],
+                     color='#1E90FF', alpha=0.7)
+        if pointer_pd['frap_filter_single_exp'][i] == 1:
             plt.plot(pointer_pd['real_time_post'][i], pointer_pd['single_exp_fit'][i], '--',
-                     color=cmap1_rgba[i + 1], alpha=0.7)
-            plt.xlabel('time (s)')
-            plt.ylabel('normalized intensity (AU)')
-            plt.savefig('%s/frap_curves_filtered_%d.pdf' % (storage_path, i))
+                     color=cmap2_rgba[1], alpha=0.7, label='single_exp')
+        if pointer_pd['frap_filter_soumpasis'][i] == 1:
+            plt.plot(pointer_pd['real_time_post'][i], pointer_pd['soumpasis_fit'][i], '--',
+                     color=cmap2_rgba[2], alpha=0.7, label='soumpasis')
+        if pointer_pd['frap_filter_double_exp'][i] == 1:
+            plt.plot(pointer_pd['real_time_post'][i], pointer_pd['double_exp_fit'][i], '--',
+                     color=cmap2_rgba[3], alpha=0.7, label='double_exp')
+        if pointer_pd['frap_filter_ellenberg'][i] == 1:
+            plt.plot(pointer_pd['real_time_post'][i], pointer_pd['ellenberg_fit'][i], '--',
+                     color=cmap2_rgba[4], alpha=0.7, label='ellenberg')
+        if pointer_pd['frap_filter_optimal'][i] == 1:
+            plt.plot(pointer_pd['real_time_post'][i], pointer_pd['optimal_fit'][i], '--',
+                     color=cmap2_rgba[5], alpha=0.7, label='optimal')
+        plt.xlabel('time (s)')
+        plt.ylabel('normalized intensity (AU)')
+        plt.legend(loc=2, bbox_to_anchor=(0.02, 0.99))
+        plt.savefig('%s/frap_curves_filtered_%d.pdf' % (storage_path, i))
+
+
