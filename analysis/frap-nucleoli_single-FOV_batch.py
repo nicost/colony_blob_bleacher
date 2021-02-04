@@ -13,7 +13,7 @@ import os
 
 # paths
 data_source = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/" \
-            "20201216_CBB_nucleoliBleachingTest_drugTreatment/Ctrl-2DG-CCCP-36pos_partial/CCCP/"
+            "20201216_CBB_nucleoliBleachingTest_drugTreatment/Ctrl-2DG-CCCP-36pos_partial/WT/"
 
 # values for analysis
 data_c = 0
@@ -48,7 +48,7 @@ for s in range(len(dirs)):
     # LOAD MOVIE
     # --------------------------
     print("### Load movie ...")
-    data_log = pd.DataFrame({'pos': [pos]})
+    data_log = pd.DataFrame({'pos': [s]})
 
     # build up pycromanager bridge
     # first start up Micro-Manager (needs to be compatible version)
@@ -87,7 +87,7 @@ for s in range(len(dirs)):
     print("Found %d nucleoli." % data_log['num_nucleoli_detected'][0])
 
     # nucleoli pd dataset
-    nucleoli_pd = organelle_analysis(pix, nucleoli, 'nucleoli', pos)
+    nucleoli_pd = organelle_analysis(pix, nucleoli, 'nucleoli', s)
     # link nucleoli with corresponding nuclear
     round_x = [round(num) for num in nucleoli_pd['x']]
     round_y = [round(num) for num in nucleoli_pd['y']]
@@ -98,7 +98,7 @@ for s in range(len(dirs)):
                                                           obj.object_count(nucleoli)))
 
     # nuclear pd dataset
-    nuclear_pd = nuclear_analysis(label_nuclear, nucleoli_pd, pos)
+    nuclear_pd = nuclear_analysis(label_nuclear, nucleoli_pd, s)
 
     # ----------------------------------
     # BLEACH SPOTS DETECTION
@@ -148,7 +148,8 @@ for s in range(len(dirs)):
     # get raw intensities for bleach spots and control spots
     pointer_pd['raw_int'] = ana.get_intensity(bleach_spots, pixels_tseries)
     ctrl_spots_int_tseries = ana.get_intensity(ctrl_spots, pixels_tseries)
-    ctrl_pd = pd.DataFrame({'ctrl_spots': np.arange(0, num_ctrl_spots, 1), 'raw_int': ctrl_spots_int_tseries})
+    ctrl_pd = pd.DataFrame({'pos': [s] * num_ctrl_spots, 'ctrl_spots': np.arange(0, num_ctrl_spots, 1),
+                            'raw_int': ctrl_spots_int_tseries})
 
     print("### Image analysis: background correction ...")
     # background intensity measurement
