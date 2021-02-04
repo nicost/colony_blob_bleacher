@@ -375,3 +375,15 @@ def find_closest(aim_x: int or float, aim_y: int or float, x_list: list, y_list:
             y_closest = y_temp
 
     return x_closest, y_closest
+
+
+def append_data(f, f1, n):
+    if n == 0:
+        f.write(f1.read())
+    else:
+        f1_line = f1.readlines()
+        for i in range(len(f1_line)):
+            if i != 0:
+                f.write(f1_line[i])
+
+    return 0
