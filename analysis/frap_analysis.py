@@ -219,6 +219,7 @@ pointer_pd['raw_int'] = ana.get_intensity(bleach_spots, pixels_tseries)
 ctrl_spots_int_tseries = ana.get_intensity(ctrl_spots, pixels_tseries)
 ctrl_pd = pd.DataFrame({'ctrl_spots': np.arange(0, num_ctrl_spots, 1), 'raw_int': ctrl_spots_int_tseries})
 
+print("### Image analysis: background correction ...")
 # background intensity measurement
 bg_int_tseries = ana.get_bg_int(pixels_tseries)
 pointer_pd['bg_int'] = [bg_int_tseries] * len(pointer_pd)
@@ -238,6 +239,7 @@ else:
 pointer_pd['bg_cor_int'] = ana.bg_correction(pointer_pd['raw_int'], bg)
 ctrl_pd['bg_cor_int'] = ana.bg_correction(ctrl_pd['raw_int'], bg)
 
+print("### Image analysis: photobleaching correction ...")
 # photobleaching factor calculation
 if num_ctrl_spots != 0:
     # calculate photobleaching factor
@@ -268,6 +270,7 @@ pointer_pd = pd.concat([pointer_pd, frap_pd], axis=1)
 # --------------------------------------------------
 # FRAP CURVE FITTING
 # --------------------------------------------------
+print("### Imaging analysis: curve fitting ...")
 
 # curve fitting with linear to determine initial slope
 linear_fit_pd = mat.frap_fitting_linear(pointer_pd['real_time_post'], pointer_pd['int_curve_post_nor'])
@@ -304,6 +307,7 @@ pointer_pd['frap_filter_double_exp'] = ble.frap_filter(pointer_pd, 'double_exp')
 pointer_pd['frap_filter_ellenberg'] = ble.frap_filter(pointer_pd, 'ellenberg')
 pointer_pd['frap_filter_optimal'] = ble.frap_filter(pointer_pd, 'optimal')
 
+pointer_pd['pos'] = [0] * len(pointer_pd)
 pointer_ft_pd = pointer_pd[pointer_pd['frap_filter_optimal'] == 1]
 data_log['num_frap_curves'] = [len(pointer_ft_pd)]
 print("%d spots passed filters for FRAP curve quality control." % data_log['num_frap_curves'][0])
@@ -330,7 +334,8 @@ nuclear_pd.to_csv('%s/data_nuclear.txt' % storage_path, index=False, sep='\t')
 nucleoli_pd.to_csv('%s/data_nucleoli.txt' % storage_path, index=False, sep='\t')
 
 # simplified dataset of bleach spots after FRAP curve quality control
-pointer_out = pd.DataFrame({'bleach_spots': pointer_ft_pd['bleach_spots'],
+pointer_out = pd.DataFrame({'pos': pointer_ft_pd['pos'],
+                            'bleach_spots': pointer_ft_pd['bleach_spots'],
                             'x': pointer_ft_pd['x'],
                             'y': pointer_ft_pd['y'],
                             'nucleoli': pointer_ft_pd['nucleoli'],
@@ -339,9 +344,14 @@ pointer_out = pd.DataFrame({'bleach_spots': pointer_ft_pd['bleach_spots'],
                             'bleach_frame': pointer_ft_pd['bleach_frame'],
                             'pre_bleach_int': pointer_ft_pd['pre_bleach_int'],
                             'start_int': pointer_ft_pd['frap_start_int'],
-                            'single_exp_r2': pointer_ft_pd['single_exp_r2'],
-                            'single_exp_mobile_fraction': pointer_ft_pd['single_exp_mobile_fraction'],
-                            'single_exp_t_half': pointer_ft_pd['single_exp_t_half']})
+                            'mobile_fraction': pointer_ft_pd['mobile_fraction'],
+                            't_half': pointer_ft_pd['t_half'],
+                            'ini_slope': pointer_ft_pd['ini_slope'],
+                            'linear_slope': pointer_ft_pd['linear_slope'],
+                            'optimal_r2': pointer_ft_pd['optimal_r2'],
+                            'optimal_mobile_fraction': pointer_ft_pd['optimal_mobile_fraction'],
+                            'optimal_t_half': pointer_ft_pd['optimal_t_half'],
+                            'optimal_slope': pointer_ft_pd['optimal_slope']})
 pointer_out.to_csv('%s/data.txt' % storage_path, index=False, sep='\t')
 
 # images
