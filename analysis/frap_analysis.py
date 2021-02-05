@@ -88,9 +88,9 @@ DISPLAYS
 # paths
 # data_path = "C:\\Users\\NicoLocal\\Images\\Jess\\20201116-Nucleoli-bleaching-4x\\PythonAcq1\\AutoBleach_15"
 data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/" \
-            "20201216_CBB_nucleoliBleachingTest_drugTreatment/Ctrl-2DG-CCCP-36pos_partial/exp_110/"
+            "20201216_CBB_nucleoliBleachingTest_drugTreatment/20210203/WT1/C2-Site_0_1/"
 save_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/" \
-            "20201216_CBB_nucleoliBleachingTest_drugTreatment/Ctrl-2DG-CCCP-36pos_partial/exp_110/"
+            "20201216_CBB_nucleoliBleachingTest_drugTreatment/20210203/WT1/C2-Site_0_1/"
 
 # values for analysis
 data_c = 0
@@ -102,6 +102,7 @@ max_size = 1000  # maximum nucleoli size; default = 1000;
 # larger ones are generally cells without nucleoli
 num_dilation = 3  # number of dilation from the coordinate;
 # determines analysis size of the analysis spots; default = 3
+frap_start_delay = 6
 
 # modes
 mode_bleach_detection = 'single-offset'  # only accepts 'single-raw' or 'single-offset'
@@ -184,7 +185,7 @@ log_pd.columns = ['time', 'aim_x', 'aim_y']  # reformat log_pd
 log_pd['bleach_frame'] = dat.get_frame(log_pd['time'], acquire_time_tseries)
 
 # get bleach spot coordinate
-coordinate_pd = ble.get_bleach_spots_coordinates(log_pd, store, cb, data_c, mode_bleach_detection)
+coordinate_pd = ble.get_bleach_spots_coordinates(log_pd, store, cb, data_c, mode_bleach_detection, frap_start_delay)
 log_pd = pd.concat([log_pd, coordinate_pd], axis=1)
 
 # link pointer with corresponding nucleoli
@@ -264,7 +265,7 @@ if num_ctrl_spots != 0:
     pointer_pd['mean_int'] = ana.pb_correction(pointer_pd['bg_cor_int'], pb)
 
 # normalize frap curve and measure mobile fraction and t-half based on curve itself
-frap_pd = ble.frap_analysis(pointer_pd, max_t, acquire_time_tseries, real_time)
+frap_pd = ble.frap_analysis(pointer_pd, max_t, acquire_time_tseries, real_time, frap_start_delay)
 pointer_pd = pd.concat([pointer_pd, frap_pd], axis=1)
 
 # --------------------------------------------------
