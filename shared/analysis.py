@@ -254,7 +254,12 @@ def get_bg_int(pixels_tseries: list):
             bg_int_tseries.append(bg_prop_pd['mean_intensity'][0])
         else:
             # find the mean_intensity of the largest area
-            bg_int_temp = bg_prop_pd[bg_prop_pd.area == bg_prop_pd.area.max()]['mean_intensity'][0]
+            max_area = 0
+            bg_int_temp = 0
+            for j in range(len(bg_prop_pd)):
+                if bg_prop_pd['area'][j] > max_area:
+                    max_area = bg_prop_pd['area'][j]
+                    bg_int_temp = bg_prop_pd['mean_intensity'][j]
             bg_int_tseries.append(bg_int_temp)
 
     return bg_int_tseries
