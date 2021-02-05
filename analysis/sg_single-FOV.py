@@ -52,11 +52,11 @@ DISPLAYS
 # PARAMETERS ALLOW CHANGE
 # --------------------------
 # paths
-data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/20210100_SG_scoring/WT"
-save_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/20210100_SG_scoring/dataAnalysis1"
+data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/20210100_SG_scoring/TimeCourse/ActD_CX_TC_1/"
+save_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/20210100_SG_scoring/TimeCourse/dataAnalysis1"
 
 # values for analysis
-data_p = 2
+data_p = 0
 data_t = 0
 data_c = 0
 thresholding = 'local-sg'  # only accepts 'na', 'otsu', 'yen', 'local-nucleoli' and 'local-sg'
