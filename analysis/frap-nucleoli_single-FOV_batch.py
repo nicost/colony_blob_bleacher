@@ -13,7 +13,7 @@ import os
 
 # paths
 data_source = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/" \
-            "20201216_CBB_nucleoliBleachingTest_drugTreatment/Ctrl-2DG-CCCP-36pos_partial/WT/"
+            "20201216_CBB_nucleoliBleachingTest_drugTreatment/20210203/WT1/"
 
 # values for analysis
 data_c = 0
@@ -25,6 +25,7 @@ max_size = 1000  # maximum nucleoli size; default = 1000;
 # larger ones are generally cells without nucleoli
 num_dilation = 3  # number of dilation from the coordinate;
 # determines analysis size of the analysis spots; default = 3
+frap_start_delay = 6
 
 # modes
 mode_bleach_detection = 'single-offset'  # only accepts 'single-raw' or 'single-offset'
@@ -40,15 +41,17 @@ dirs.pop(0)
 num_dir = len(dirs)
 
 for s in range(len(dirs)):
-    print("### DATA PROCESSING: %d / %d" % (s+1, num_dir))
+    folder = dirs[s].split('/')[-1]
+    print("### DATA PROCESSING: %s (%d / %d)" % (folder, s+1, num_dir))
     data_path = dirs[s]
     save_path = dirs[s]
+    pos = dirs[s].split('/')[-1].split('_')[1]
 
     # --------------------------
     # LOAD MOVIE
     # --------------------------
     print("### Load movie ...")
-    data_log = pd.DataFrame({'pos': [s]})
+    data_log = pd.DataFrame({'pos': [pos]})
 
     # build up pycromanager bridge
     # first start up Micro-Manager (needs to be compatible version)
@@ -87,7 +90,7 @@ for s in range(len(dirs)):
     print("Found %d nucleoli." % data_log['num_nucleoli_detected'][0])
 
     # nucleoli pd dataset
-    nucleoli_pd = organelle_analysis(pix, nucleoli, 'nucleoli', s)
+    nucleoli_pd = organelle_analysis(pix, nucleoli, 'nucleoli', pos)
     # link nucleoli with corresponding nuclear
     round_x = [round(num) for num in nucleoli_pd['x']]
     round_y = [round(num) for num in nucleoli_pd['y']]
@@ -98,7 +101,7 @@ for s in range(len(dirs)):
                                                           obj.object_count(nucleoli)))
 
     # nuclear pd dataset
-    nuclear_pd = nuclear_analysis(label_nuclear, nucleoli_pd, s)
+    nuclear_pd = nuclear_analysis(label_nuclear, nucleoli_pd, pos)
 
     # ----------------------------------
     # BLEACH SPOTS DETECTION
@@ -115,7 +118,7 @@ for s in range(len(dirs)):
     log_pd['bleach_frame'] = dat.get_frame(log_pd['time'], acquire_time_tseries)
 
     # get bleach spot coordinate
-    coordinate_pd = ble.get_bleach_spots_coordinates(log_pd, store, cb, data_c, mode_bleach_detection)
+    coordinate_pd = ble.get_bleach_spots_coordinates(log_pd, store, cb, data_c, mode_bleach_detection, frap_start_delay)
     log_pd = pd.concat([log_pd, coordinate_pd], axis=1)
 
     # link pointer with corresponding nucleoli
@@ -148,7 +151,7 @@ for s in range(len(dirs)):
     # get raw intensities for bleach spots and control spots
     pointer_pd['raw_int'] = ana.get_intensity(bleach_spots, pixels_tseries)
     ctrl_spots_int_tseries = ana.get_intensity(ctrl_spots, pixels_tseries)
-    ctrl_pd = pd.DataFrame({'pos': [s] * num_ctrl_spots, 'ctrl_spots': np.arange(0, num_ctrl_spots, 1),
+    ctrl_pd = pd.DataFrame({'pos': [pos] * num_ctrl_spots, 'ctrl_spots': np.arange(0, num_ctrl_spots, 1),
                             'raw_int': ctrl_spots_int_tseries})
 
     print("### Image analysis: background correction ...")
@@ -196,7 +199,7 @@ for s in range(len(dirs)):
         pointer_pd['mean_int'] = ana.pb_correction(pointer_pd['bg_cor_int'], pb)
 
     # normalize frap curve and measure mobile fraction and t-half based on curve itself
-    frap_pd = ble.frap_analysis(pointer_pd, max_t, acquire_time_tseries, real_time)
+    frap_pd = ble.frap_analysis(pointer_pd, max_t, acquire_time_tseries, real_time, frap_start_delay)
     pointer_pd = pd.concat([pointer_pd, frap_pd], axis=1)
 
     # --------------------------------------------------
@@ -239,7 +242,7 @@ for s in range(len(dirs)):
     pointer_pd['frap_filter_ellenberg'] = ble.frap_filter(pointer_pd, 'ellenberg')
     pointer_pd['frap_filter_optimal'] = ble.frap_filter(pointer_pd, 'optimal')
 
-    pointer_pd['pos'] = [s] * len(pointer_pd)
+    pointer_pd['pos'] = [pos] * len(pointer_pd)
     pointer_ft_pd = pointer_pd[pointer_pd['frap_filter_optimal'] == 1]
     data_log['num_frap_curves'] = [len(pointer_ft_pd)]
     print("%d spots passed filters for FRAP curve quality control." % data_log['num_frap_curves'][0])
