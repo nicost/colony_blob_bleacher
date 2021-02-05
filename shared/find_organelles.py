@@ -2,6 +2,7 @@ from skimage.segmentation import clear_border, random_walker
 from shared.find_blobs import find_blobs, get_binary_global
 from shared.objects import remove_small, remove_large
 from skimage.measure import label, regionprops
+import shared.analysis as ana
 import shared.warning as warn
 import numpy as np
 import pandas as pd
@@ -145,10 +146,11 @@ def find_nuclear(pixels: np.array):
     :param pixels: np.array, nucleoli stain image
     :return: label_nuclear_sort: np.array, grey scale labeled nuclear image
     """
+    bg_int = ana.get_bg_int([pixels])[0]
     # nuclear detection
     markers = np.zeros_like(pixels)
-    markers[pixels < 220] = 1
-    markers[pixels > 450] = 2
+    markers[pixels < (1.7 * bg_int)] = 1
+    markers[pixels > (3 * bg_int)] = 2
     seg = random_walker(pixels, markers)
     # nuclear binary mask
     nuclear = np.zeros_like(pixels)
