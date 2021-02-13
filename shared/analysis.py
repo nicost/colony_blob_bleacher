@@ -56,6 +56,9 @@ pix_stitch
               filled with same size black images)
     SYNTAX:   pix_stitch(pixels_pd: pd.DataFrame, num_col: int, num_row: int)
     
+find_background
+    FUNCTION: detect true background from given image
+    SYNTAX:   find_background(pixels: np.array)
 """
 
 DEFAULT = object()
@@ -440,3 +443,21 @@ def pix_stitch(pixels_pd: pd.DataFrame, num_col: int, num_row: int):
                              axis=0, out=None)
 
     return out
+
+
+def find_background(pixels: np.array):
+    """
+    Detect true background from given image
+
+    :param pixels: np.array, image for background identification
+    :return: bg: np.array, 0-and-1, background image
+    """
+
+    bg_int = get_bg_int([pixels])[0]
+    bg = pixels < 0.9 * bg_int
+    for i in range(2):
+        bg = binary_erosion(bg)
+    for i in range(2):
+        bg = binary_dilation(bg)
+
+    return bg
