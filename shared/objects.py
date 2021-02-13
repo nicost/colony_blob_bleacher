@@ -1,6 +1,6 @@
 import numpy as np
 import shared.warning as warn
-from skimage.morphology import remove_small_objects, medial_axis, extrema, binary_dilation
+from skimage.morphology import remove_small_objects, medial_axis, extrema, binary_dilation, dilation
 from skimage.measure import label, regionprops
 from skimage.filters import sobel
 from skimage import segmentation
@@ -47,10 +47,17 @@ label_remove_small
     FUNCTION: remove objects smaller than the specified size from labeled image
     SYNTAX:   label_remove_small(label_obj: np.array, min_size: int)
 
+label_remove_large
+    FUNCTION: remove objects larger than the specified size from labeled image
+    SYNTAX:   label_remove_large(label_obj: np.array, max_size: int)
+    
 label_resort
     FUNCTION: re-label random labeled image into sequential labeled image
     SYNTAX:   label_resort(label_obj: np.array)
 
+label_fill_holes
+    FUNCTION: fill background holes in labeled images
+    SYNTAX:   label_fill_holes(label_obj: np.array)
 """
 
 
@@ -211,15 +218,18 @@ def object_count(obj: np.array):
     return count_obj
 
 
-def label_watershed(obj: np.array):
+def label_watershed(obj: np.array, maxima_threshold):
     """
     Separate touching objects based on distance map (similar to imageJ watershed)
 
     :param obj: np.array, 0-and-1
+    :param maxima_threshold: threshold for identify maxima
     :return: seg: np.array, grey scale with different objects labeled with different numbers
     """
     _, dis = medial_axis(obj, return_distance=True)
-    maxima = extrema.h_maxima(dis, 1)
+    maxima = extrema.h_maxima(dis, maxima_threshold)
+    # maxima_threshold for Jess data = 1
+    # maxima_threshold for Jose data = 10
     maxima_mask = binary_dilation(maxima)
     for i in range(6):
         maxima_mask = binary_dilation(maxima_mask)
@@ -252,6 +262,24 @@ def label_remove_small(label_obj: np.array, min_size: int):
     return out
 
 
+def label_remove_large(label_obj: np.array, max_size: int):
+    """
+    Remove objects larger than the specified size from labeled image
+
+    :param label_obj: np.array, grey scale labeled image
+    :param max_size: int
+                The largest allowable object size
+    :return: out: np.array, grey scale labeled image with large objects removed
+    """
+    out = np.zeros_like(label_obj)
+    obj_prop = regionprops(label_obj)
+    for i in range(len(obj_prop)):
+        if obj_prop[i].area <= max_size:
+            out[label_obj == obj_prop[i].label] = obj_prop[i].label
+
+    return out
+
+
 def label_resort(label_obj: np.array):
     """
     Re-label random labeled image into sequential labeled image.
@@ -269,3 +297,38 @@ def label_resort(label_obj: np.array):
             count = count + 1
 
     return label_out
+
+
+def label_fill_holes(label_obj: np.array):
+    """
+    Fill background holes in labeled images
+
+    Algorithm:
+        when the boundary of a given hole belong to the same indexed object, assign the index to the hole
+
+    :param label_obj: np.array, labeled image
+    :return: out: label_image with holes filled
+    """
+    out = label_obj.copy()
+
+    # identify background
+    bg = np.zeros_like(label_obj)
+    bg[label_obj == 0] = 1
+    bg = segmentation.clear_border(bg)
+    label_bg = label(bg)
+
+    # identify border
+    label_border = dilation(label_bg)
+    for i in range(3):
+        label_border = dilation(label_border)
+    label_border[bg == 1] = 0
+
+    border_prop = regionprops(label_border, label_obj)
+    for i in range(np.amax(label_border)):
+        index = border_prop[i].label
+        mean_index = border_prop[i].mean_intensity
+        diff = mean_index - int(mean_index)
+        if diff == 0:
+            out[label_bg == index] = int(mean_index)
+
+    return out
