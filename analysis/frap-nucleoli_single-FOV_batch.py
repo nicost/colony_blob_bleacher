@@ -13,7 +13,7 @@ import os
 
 # paths
 data_source = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/" \
-            "20201216_CBB_nucleoliBleachingTest_drugTreatment/20210203/WT1/"
+              "20210203_CBB_nucleoliArsAndHeatshockTreatment/WT3"
 
 # values for analysis
 data_c = 0
@@ -25,7 +25,7 @@ max_size = 1000  # maximum nucleoli size; default = 1000;
 # larger ones are generally cells without nucleoli
 num_dilation = 3  # number of dilation from the coordinate;
 # determines analysis size of the analysis spots; default = 3
-frap_start_delay = 6
+frap_start_delay = 4
 
 # modes
 mode_bleach_detection = 'single-offset'  # only accepts 'single-raw' or 'single-offset'
@@ -46,6 +46,7 @@ for s in range(len(dirs)):
     data_path = dirs[s]
     save_path = dirs[s]
     pos = dirs[s].split('/')[-1].split('_')[1]
+    #pos = dirs[s].split('_')[-1]
 
     # --------------------------
     # LOAD MOVIE
@@ -174,13 +175,25 @@ for s in range(len(dirs)):
     pointer_pd['bg_cor_int'] = ana.bg_correction(pointer_pd['raw_int'], bg)
     ctrl_pd['bg_cor_int'] = ana.bg_correction(ctrl_pd['raw_int'], bg)
 
+    # filter control traces
+    filter_ctrl = []
+    for i in range(len(ctrl_pd)):
+        ctrl_int = ctrl_pd['bg_cor_int'][i]
+        if (max(ctrl_int) - min(ctrl_int)) / max(ctrl_int) > 0.4:
+            filter_ctrl.append(0)
+        else:
+            filter_ctrl.append(1)
+    ctrl_pd['filter'] = filter_ctrl
+    ctrl_pd_ft = ctrl_pd[ctrl_pd['filter'] == 1].reset_index()
+    pointer_pd['num_ctrl_spots_ft'] = [len(ctrl_pd_ft)] * len(pointer_pd)
+
     print("### Image analysis: photobleaching correction ...")
     # photobleaching factor calculation
-    if num_ctrl_spots != 0:
+    if len(ctrl_pd_ft) != 0:
         # calculate photobleaching factor
-        pb_factor = ana.get_pb_factor(ctrl_pd['bg_cor_int'])
+        pb_factor = ana.get_pb_factor(ctrl_pd_ft['bg_cor_int'])
         pointer_pd['pb_factor'] = [pb_factor] * len(pointer_pd)
-        print("%d ctrl points are used to correct photobleaching." % len(ctrl_pd))
+        print("%d ctrl points are used to correct photobleaching." % len(ctrl_pd_ft))
 
         # pb_factor fitting with single exponential decay
         pb_fit = mat.fitting_single_exp_decay(np.arange(0, len(pb_factor), 1), pb_factor)
