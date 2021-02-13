@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from pycromanager import Bridge
-from shared.find_organelles import find_organelle, organelle_analysis, find_nuclear, nuclear_analysis
+from shared.find_organelles import find_organelle, organelle_analysis, find_nuclear_nucleoli, nuclear_analysis
 from skimage.measure import label
 import shared.analysis as ana
 import shared.dataframe as dat
@@ -80,7 +80,7 @@ for s in range(len(dirs)):
     pix = np.reshape(temp.get_raw_pixels(), newshape=[temp.get_height(), temp.get_width()])
 
     # nuclear detection
-    label_nuclear = find_nuclear(pix)
+    label_nuclear = find_nuclear_nucleoli(pix)
     data_log['num_nuclei_detected'] = [np.amax(label_nuclear)]
     print("Found %d nuclei." % data_log['num_nuclei_detected'][0])
 
