@@ -128,8 +128,8 @@ def get_bleach_spots_coordinates(log_pd: pd.DataFrame, store, cb, data_c: int, m
                 x_lst.append(x_closest)
                 y_lst.append(y_closest)
             else:  # do not find any bright spots, use the coordinates from log file
-                x_lst.append(log_pd['aim_x'][i])
-                y_lst.append(log_pd['aim_y'][i])
+                x_lst.append(0)
+                y_lst.append(0)
 
         coordinate_pd = pd.DataFrame({'x': x_lst, 'y': y_lst})
         coordinate_pd['x_diff'] = coordinate_pd['x'] - log_pd['aim_x']
@@ -189,6 +189,8 @@ def filter_bleach_spots(log_pd: pd.DataFrame):
     1) aim outside of nucleoli
     2) bleach the same nucleoli
     3) too close to merge as a single bleach spots
+    4) (0,0)
+    5) too far away from the aim point (>20 any direction)
 
     :param log_pd: pd.DataFrame, requires columns 'nucleoli', 'bleach_spots'
                 'nucleoli': corresponding nucleoli label index
@@ -207,7 +209,9 @@ def filter_bleach_spots(log_pd: pd.DataFrame):
     # filter all the pointers from log to generate real pointer_pd
     pointer_pd = log_pd[(log_pd['nucleoli'] > 0)
                         & (~log_pd['nucleoli'].isin(pointer_target_same_nucleoli))
-                        & (~log_pd['bleach_spots'].isin(pointer_same_analysis_spots))]
+                        & (~log_pd['bleach_spots'].isin(pointer_same_analysis_spots))
+                        & (log_pd['x'] != 0) & (log_pd['y'] != 0) & (np.abs(log_pd['x_diff']) <= 10)
+                        & (np.abs(log_pd['y_diff'] <= 10))]
     del pointer_pd['bleach_spots']  # delete previous bleach_spots information
     pointer_pd = pointer_pd.reset_index(drop=True)  # reset index
 
@@ -220,6 +224,15 @@ def filter_bleach_spots(log_pd: pd.DataFrame):
     num_filter3 = len(log_pd[(log_pd['nucleoli'] > 0) & (~log_pd['nucleoli'].isin(pointer_target_same_nucleoli))
                              & (log_pd['bleach_spots'].isin(pointer_same_analysis_spots))])
     print("%d bleach spots aim too close." % num_filter3)
+    num_filter4 = len(log_pd[(log_pd['nucleoli'] > 0) & (~log_pd['nucleoli'].isin(pointer_target_same_nucleoli))
+                             & (~log_pd['bleach_spots'].isin(pointer_same_analysis_spots))
+                             & ((log_pd['x'] == 0) | (log_pd['y'] == 0))])
+    print("%d bleach spots did not find." % num_filter4)
+    num_filter5 = len(log_pd[(log_pd['nucleoli'] > 0) & (~log_pd['nucleoli'].isin(pointer_target_same_nucleoli))
+                             & (~log_pd['bleach_spots'].isin(pointer_same_analysis_spots))
+                             & (log_pd['x'] != 0) & (log_pd['y'] != 0)
+                             & ((np.abs(log_pd['x_diff']) > 10) | (np.abs(log_pd['y_diff']) > 10))])
+    print("%d bleach spots too far away from aim points." % num_filter5)
 
     return pointer_pd
 
@@ -391,7 +404,7 @@ def frap_filter(pointer_pd: pd.DataFrame, f: str):
     1) number of pre_bleach frame < 5
     2) total imaging length < 100
     3) does not find optional fit (single exponential)
-    4) mobile fraction < 0 or mobile fraction > 1.5
+    4) mobile fraction < 0 or mobile fraction > 1.05
     5) r2 of fit < 0.7
 
     :param pointer_pd: pd.DataFrame
@@ -408,7 +421,7 @@ def frap_filter(pointer_pd: pd.DataFrame, f: str):
                 | (pointer_pd['imaging_length'][i] < 100) \
                 | (np.isnan(pointer_pd['%s_r2' % f][i])) \
                 | (pointer_pd['%s_mobile_fraction' % f][i] < 0) \
-                | (pointer_pd['%s_mobile_fraction' % f][i] >= 1.5) \
+                | (pointer_pd['%s_mobile_fraction' % f][i] >= 1.05) \
                 | (pointer_pd['%s_r2' % f][i] < 0.7):
             frap_flt.append(0)
         else:
