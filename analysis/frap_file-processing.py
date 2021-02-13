@@ -2,11 +2,11 @@ import os
 import shared.dataframe as dat
 
 data_source = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/" \
-            "20201216_CBB_nucleoliBleachingTest_drugTreatment/Ctrl-2DG-CCCP-36pos_partial/WT/"
+              "20210203_CBB_nucleoliArsAndHeatshockTreatment/WT3"
 save_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/" \
-            "20201216_CBB_nucleoliBleachingTest_drugTreatment/Ctrl-2DG-CCCP-36pos_partial/dataAnalysis/"
+              "20210203_CBB_nucleoliArsAndHeatshockTreatment/dataAnalysis"
 
-name = 'WT'
+name = 'WT3'
 dirs = [x[0] for x in os.walk(data_source)]
 dirs.pop(0)
 num_dir = len(dirs)
