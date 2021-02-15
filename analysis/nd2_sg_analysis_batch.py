@@ -3,8 +3,8 @@ from matplotlib.figure import Figure
 from shared.find_organelles import find_organelle, find_cell, get_binary_global
 import os
 
-data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/20200212_Jose_SG/data"
-save_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/20200212_Jose_SG/dataAnalysis"
+data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/20210212_Jose_SG/data"
+save_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/20210212_Jose_SG/dataAnalysis"
 
 thresholding = 'local-sg1'  # only accepts 'na', 'otsu', 'yen', 'local-nucleoli' and 'local-sg'
 min_size_sg = 100
