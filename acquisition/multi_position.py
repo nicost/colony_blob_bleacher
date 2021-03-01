@@ -13,6 +13,8 @@ from shared.find_organelles import find_organelle
 
 nr = 40
 nr_between_projector_checks = 2
+cal_exposure = 200
+cal_offset = 5
 
 # build up pycromanager bridge
 bridge = Bridge()
@@ -23,6 +25,16 @@ projector_device = projector.get_projection_device()
 
 
 def snap_and_get_bleach_location(exposure, cutoff):
+    """
+    Takes an image with the current settings.  Finds a location close to the center where there are
+    no objects (as defined in function central_picel_without_cells).  If no such location is found, returns -1.
+    Targets bleacher to this location, exposes and takes an image of that exposure.  Finds the center of the
+    actual bleach spot.  When the square of the distance between the intended target and the actual bleach spot is
+    greater than provided offset, will execute a full calibration.
+    :param exposure: exposure time to use for bleaching
+    :param cutoff: square of distance.  When offset is higher than this code should execute a calibration
+    :return: tuple with first Boolean indicating if a calibration took place, second variable the square of the offset distance
+    """
     p_exposure = projector_device.get_exposure()
     c_exposure = mmc.get_exposure()
     test_img = mm.live().snap(True).get(0)
@@ -42,13 +54,16 @@ def snap_and_get_bleach_location(exposure, cutoff):
         measured_location = bleach_location(pre_np_img, post_np_img, location, [100, 100])
         offset = (measured_location[0] - location[0], measured_location[1] - location[1])
         print(offset)
+        cal = False
         if offset[0] * offset[0] + offset[1] * offset[1] > cutoff:
             projector.calibrate(True)
+            cal = True
+            print("Calibrated")
         projector.set_exposure(projector_device, p_exposure)
         mmc.set_exposure(c_exposure)
         mm.shutter().set_auto_shutter(auto_shutter)
-        return offset[0] * offset[0] + offset[1] * offset[1]
-    return -1
+        return cal, offset[0] * offset[0] + offset[1] * offset[1]
+    return False, -1
 
 
 # TODO We may want to configure the acquisition settings to ensure they are what we want
@@ -65,11 +80,13 @@ for idx in range(pos_list.get_number_of_positions()):
     pos.go_to_position(pos, mmc)
     time.sleep(0.1)
     if count >= nr_between_projector_checks:
-        error = snap_and_get_bleach_location(200, 4)
+        calibrated, error = snap_and_get_bleach_location(cal_exposure, cal_offset)
         if error < 0:
             count -= 1
         else:
             count = 0
+        if calibrated:
+            continue
     count += 1
     img = mm.live().snap(False).get(0)
     pixels = np.reshape(img.get_raw_pixels(), newshape=[img.get_height(), img.get_width()])

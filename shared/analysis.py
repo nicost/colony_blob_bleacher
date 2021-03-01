@@ -103,7 +103,9 @@ def bleach_location(pre_pixels: np.array,
     subtracted_mean = rank.mean(subtracted, selem=selem)
     peaks_rc_roi = peak_local_max(subtracted_mean, min_distance=20, threshold_rel=0.6, num_peaks=1, indices=True)
     peaks_rc = peaks_rc_roi + [ep_rc[0] - half_roi_size[0], ep_rc[1] - half_roi_size[1]]
-    peaks = [peaks_rc[0][0], post_pixels.shape[1] - peaks_rc[0][1]]
+    if len(peaks_rc) < 1:
+        return expected_position
+    peaks = [peaks_rc[0][0], peaks_rc[0][1]]
     return peaks
 
 
