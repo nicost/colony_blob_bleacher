@@ -84,7 +84,7 @@ for idx in range(pos_list.get_number_of_positions()):
 
     well_temp = pos.get_label().split('-')[0]
     if well_temp == well:
-        if well_count < n_curve:
+        if well_count >= n_curve:
             continue
     else:
         well_count = 0
