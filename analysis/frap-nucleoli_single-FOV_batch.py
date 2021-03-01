@@ -12,8 +12,8 @@ import shared.math_functions as mat
 import os
 
 # paths
-data_source = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/" \
-              "20210203_CBB_nucleoliArsAndHeatshockTreatment/WT3"
+data_source = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/" \
+            "20210226_CBB_nucleoliWTPhotobleachingConditionTest/10mW_50ms/F2/"
 
 # values for analysis
 data_c = 0
@@ -29,6 +29,7 @@ frap_start_delay = 4
 
 # modes
 mode_bleach_detection = 'single-offset'  # only accepts 'single-raw' or 'single-offset'
+frap_start_mode = 'min'  # only accepts 'delay' or 'min'
 
 """
 # ---------------------------------------------------------------------------------------------------
@@ -42,9 +43,10 @@ num_dir = len(dirs)
 
 for s in range(len(dirs)):
     folder = dirs[s].split('/')[-1]
+    mf_name = dirs[s].split('/')[-2]
     print("### DATA PROCESSING: %s (%d / %d)" % (folder, s+1, num_dir))
     data_path = dirs[s]
-    save_path = dirs[s]
+    save_path = ("%s/dataAnalysis/%s/%s" % (data_source[:-3], mf_name, folder))
     pos = dirs[s].split('/')[-1].split('_')[1]
     #pos = dirs[s].split('_')[-1]
 
@@ -186,12 +188,14 @@ for s in range(len(dirs)):
     ctrl_pd['filter'] = filter_ctrl
     ctrl_pd_ft = ctrl_pd[ctrl_pd['filter'] == 1].reset_index()
     pointer_pd['num_ctrl_spots_ft'] = [len(ctrl_pd_ft)] * len(pointer_pd)
+    data_log['num_ctrl_spots'] = len(ctrl_pd_ft)
 
     print("### Image analysis: photobleaching correction ...")
     # photobleaching factor calculation
     if len(ctrl_pd_ft) != 0:
         # calculate photobleaching factor
         pb_factor = ana.get_pb_factor(ctrl_pd_ft['bg_cor_int'])
+
         pointer_pd['pb_factor'] = [pb_factor] * len(pointer_pd)
         print("%d ctrl points are used to correct photobleaching." % len(ctrl_pd_ft))
 
@@ -211,104 +215,116 @@ for s in range(len(dirs)):
             pb = pb_fit[0]
         pointer_pd['mean_int'] = ana.pb_correction(pointer_pd['bg_cor_int'], pb)
 
-    # normalize frap curve and measure mobile fraction and t-half based on curve itself
-    frap_pd = ble.frap_analysis(pointer_pd, max_t, acquire_time_tseries, real_time, frap_start_delay)
-    pointer_pd = pd.concat([pointer_pd, frap_pd], axis=1)
+        # normalize frap curve and measure mobile fraction and t-half based on curve itself
+        frap_pd = ble.frap_analysis(pointer_pd, max_t, acquire_time_tseries, real_time, frap_start_delay,
+                                    frap_start_mode)
+        pointer_pd = pd.concat([pointer_pd, frap_pd], axis=1)
 
-    # --------------------------------------------------
-    # FRAP CURVE FITTING
-    # --------------------------------------------------
-    print("### Imaging analysis: curve fitting ...")
+        # --------------------------------------------------
+        # FRAP CURVE FITTING
+        # --------------------------------------------------
+        print("### Imaging analysis: curve fitting ...")
 
-    # curve fitting with linear to determine initial slope
-    linear_fit_pd = mat.frap_fitting_linear(pointer_pd['real_time_post'], pointer_pd['int_curve_post_nor'])
-    pointer_pd = pd.concat([pointer_pd, linear_fit_pd], axis=1)
+        # curve fitting with linear to determine initial slope
+        linear_fit_pd = mat.frap_fitting_linear(pointer_pd['real_time_post'], pointer_pd['int_curve_post_nor'])
+        pointer_pd = pd.concat([pointer_pd, linear_fit_pd], axis=1)
 
-    # curve fitting with single exponential function
-    single_exp_fit_pd = mat.frap_fitting_single_exp(pointer_pd['real_time_post'],
-                                                    pointer_pd['int_curve_post_nor'], pointer_pd['sigma'])
-    pointer_pd = pd.concat([pointer_pd, single_exp_fit_pd], axis=1)
+        # curve fitting with single exponential function
+        single_exp_fit_pd = mat.frap_fitting_single_exp(pointer_pd['real_time_post'],
+                                                        pointer_pd['int_curve_post_nor'], pointer_pd['sigma'])
+        pointer_pd = pd.concat([pointer_pd, single_exp_fit_pd], axis=1)
 
-    # curve fitting with soumpasis function
-    soumpasis_fit_pd = mat.frap_fitting_soumpasis(pointer_pd['real_time_post'],
-                                                  pointer_pd['int_curve_post_nor'], pointer_pd['sigma'])
-    pointer_pd = pd.concat([pointer_pd, soumpasis_fit_pd], axis=1)
+        # curve fitting with soumpasis function
+        soumpasis_fit_pd = mat.frap_fitting_soumpasis(pointer_pd['real_time_post'],
+                                                      pointer_pd['int_curve_post_nor'], pointer_pd['sigma'])
+        pointer_pd = pd.concat([pointer_pd, soumpasis_fit_pd], axis=1)
 
-    # curve fitting with double exponential function
-    double_exp_fit_pd = mat.frap_fitting_double_exp(pointer_pd['real_time_post'],
-                                                    pointer_pd['int_curve_post_nor'], pointer_pd['sigma'])
-    pointer_pd = pd.concat([pointer_pd, double_exp_fit_pd], axis=1)
+        # curve fitting with double exponential function
+        double_exp_fit_pd = mat.frap_fitting_double_exp(pointer_pd['real_time_post'],
+                                                        pointer_pd['int_curve_post_nor'], pointer_pd['sigma'])
+        pointer_pd = pd.concat([pointer_pd, double_exp_fit_pd], axis=1)
 
-    # curve fitting with ellenberg function
-    ellenberg_fit_pd = mat.frap_fitting_ellenberg(pointer_pd['real_time_post'],
-                                                  pointer_pd['int_curve_post_nor'], pointer_pd['sigma'])
-    pointer_pd = pd.concat([pointer_pd, ellenberg_fit_pd], axis=1)
+        # curve fitting with ellenberg function
+        ellenberg_fit_pd = mat.frap_fitting_ellenberg(pointer_pd['real_time_post'],
+                                                      pointer_pd['int_curve_post_nor'], pointer_pd['sigma'])
+        pointer_pd = pd.concat([pointer_pd, ellenberg_fit_pd], axis=1)
 
-    # find optimal fitting
-    optimal_fit_pd = mat.find_optimal_fitting(pointer_pd, ['single_exp', 'soumpasis', 'ellenberg', 'double_exp'])
-    pointer_pd = pd.concat([pointer_pd, optimal_fit_pd], axis=1)
+        # find optimal fitting
+        optimal_fit_pd = mat.find_optimal_fitting(pointer_pd, ['single_exp', 'soumpasis', 'ellenberg', 'double_exp'])
+        pointer_pd = pd.concat([pointer_pd, optimal_fit_pd], axis=1)
 
-    # filter frap curves
-    pointer_pd['frap_filter_single_exp'] = ble.frap_filter(pointer_pd, 'single_exp')
-    pointer_pd['frap_filter_soumpasis'] = ble.frap_filter(pointer_pd, 'soumpasis')
-    pointer_pd['frap_filter_double_exp'] = ble.frap_filter(pointer_pd, 'double_exp')
-    pointer_pd['frap_filter_ellenberg'] = ble.frap_filter(pointer_pd, 'ellenberg')
-    pointer_pd['frap_filter_optimal'] = ble.frap_filter(pointer_pd, 'optimal')
+        # filter frap curves
+        pointer_pd['frap_filter_single_exp'] = ble.frap_filter(pointer_pd, 'single_exp')
+        pointer_pd['frap_filter_soumpasis'] = ble.frap_filter(pointer_pd, 'soumpasis')
+        pointer_pd['frap_filter_double_exp'] = ble.frap_filter(pointer_pd, 'double_exp')
+        pointer_pd['frap_filter_ellenberg'] = ble.frap_filter(pointer_pd, 'ellenberg')
+        pointer_pd['frap_filter_optimal'] = ble.frap_filter(pointer_pd, 'optimal')
 
-    pointer_pd['pos'] = [pos] * len(pointer_pd)
-    pointer_ft_pd = pointer_pd[pointer_pd['frap_filter_optimal'] == 1]
-    data_log['num_frap_curves'] = [len(pointer_ft_pd)]
-    print("%d spots passed filters for FRAP curve quality control." % data_log['num_frap_curves'][0])
+        pointer_pd['pos'] = [pos] * len(pointer_pd)
+        pointer_ft_pd = pointer_pd[pointer_pd['frap_filter_optimal'] == 1]
+        data_log['num_frap_curves'] = [len(pointer_ft_pd)]
+        print("%d spots passed filters for FRAP curve quality control." % data_log['num_frap_curves'][0])
 
-    # --------------------------
-    # OUTPUT
-    # --------------------------
-    print("### Export data ...")
+        # --------------------------
+        # OUTPUT
+        # --------------------------
+        print("### Export data ...")
 
-    storage_path = save_path
-    if not os.path.exists(storage_path):
-        os.makedirs(storage_path)
+        storage_path = save_path
+        if not os.path.exists(storage_path):
+            os.makedirs(storage_path)
 
-    # measurements
-    # data_log
-    data_log.to_csv('%s/data_log.txt' % storage_path, index=False, sep='\t')
-    # full dataset of all bleach spots
-    pointer_pd.to_csv('%s/data_full.txt' % storage_path, index=False, sep='\t')
-    # dataset of control spots
-    ctrl_pd.to_csv('%s/data_ctrl.txt' % storage_path, index=False, sep='\t')
-    # dataset of nuclear
-    nuclear_pd.to_csv('%s/data_nuclear.txt' % storage_path, index=False, sep='\t')
-    # dataset of nucleoli
-    nucleoli_pd.to_csv('%s/data_nucleoli.txt' % storage_path, index=False, sep='\t')
+        # measurements
+        # data_log
+        data_log.to_csv('%s/data_log.txt' % storage_path, index=False, sep='\t')
+        # full dataset of all bleach spots
+        pointer_pd.to_csv('%s/data_full.txt' % storage_path, index=False, sep='\t')
+        # dataset of control spots
+        ctrl_pd.to_csv('%s/data_ctrl.txt' % storage_path, index=False, sep='\t')
+        # dataset of nuclear
+        nuclear_pd.to_csv('%s/data_nuclear.txt' % storage_path, index=False, sep='\t')
+        # dataset of nucleoli
+        nucleoli_pd.to_csv('%s/data_nucleoli.txt' % storage_path, index=False, sep='\t')
 
-    # simplified dataset of bleach spots after FRAP curve quality control
-    pointer_out = pd.DataFrame({'pos': pointer_ft_pd['pos'],
-                                'bleach_spots': pointer_ft_pd['bleach_spots'],
-                                'x': pointer_ft_pd['x'],
-                                'y': pointer_ft_pd['y'],
-                                'nucleoli': pointer_ft_pd['nucleoli'],
-                                'nucleoli_size': pointer_ft_pd['nucleoli_size'],
-                                'nucleoli_mean_int': pointer_ft_pd['nucleoli_mean_int'],
-                                'bleach_frame': pointer_ft_pd['bleach_frame'],
-                                'pre_bleach_int': pointer_ft_pd['pre_bleach_int'],
-                                'start_int': pointer_ft_pd['frap_start_int'],
-                                'mobile_fraction': pointer_ft_pd['mobile_fraction'],
-                                't_half': pointer_ft_pd['t_half'],
-                                'ini_slope': pointer_ft_pd['ini_slope'],
-                                'linear_slope': pointer_ft_pd['linear_slope'],
-                                'optimal_r2': pointer_ft_pd['optimal_r2'],
-                                'optimal_mobile_fraction': pointer_ft_pd['optimal_mobile_fraction'],
-                                'optimal_t_half': pointer_ft_pd['optimal_t_half'],
-                                'optimal_slope': pointer_ft_pd['optimal_slope']})
-    pointer_out.to_csv('%s/data.txt' % storage_path, index=False, sep='\t')
+        # simplified dataset of bleach spots after FRAP curve quality control
+        pointer_out = pd.DataFrame({'pos': pointer_ft_pd['pos'],
+                                    'bleach_spots': pointer_ft_pd['bleach_spots'],
+                                    'x': pointer_ft_pd['x'],
+                                    'y': pointer_ft_pd['y'],
+                                    'nucleoli': pointer_ft_pd['nucleoli'],
+                                    'nucleoli_size': pointer_ft_pd['nucleoli_size'],
+                                    'nucleoli_mean_int': pointer_ft_pd['nucleoli_mean_int'],
+                                    'bleach_frame': pointer_ft_pd['bleach_frame'],
+                                    'pre_bleach_int': pointer_ft_pd['pre_bleach_int'],
+                                    'start_int': pointer_ft_pd['frap_start_int'],
+                                    'mobile_fraction': pointer_ft_pd['mobile_fraction'],
+                                    't_half': pointer_ft_pd['t_half'],
+                                    'ini_slope': pointer_ft_pd['ini_slope'],
+                                    'linear_slope': pointer_ft_pd['linear_slope'],
+                                    'optimal_r2': pointer_ft_pd['optimal_r2'],
+                                    'optimal_mobile_fraction': pointer_ft_pd['optimal_mobile_fraction'],
+                                    'optimal_t_half': pointer_ft_pd['optimal_t_half'],
+                                    'optimal_slope': pointer_ft_pd['optimal_slope']})
+        pointer_out.to_csv('%s/data.txt' % storage_path, index=False, sep='\t')
 
-    # images
-    dis.plot_offset_map(pointer_pd, storage_path)  # offset map
-    dis.plot_raw_intensity(pointer_pd, ctrl_pd, storage_path)  # raw intensity
-    dis.plot_pb_factor(pointer_pd, storage_path)  # photobleaching factor
-    dis.plot_corrected_intensity(pointer_pd, storage_path)  # intensity after dual correction
-    dis.plot_normalized_frap(pointer_pd, storage_path)  # normalized FRAP curves
-    dis.plot_frap_fitting(pointer_pd, storage_path)  # normalized FRAP curves after filtering with fitting
-    # individual normalized FRAP curves with fitting
+        # images
+        dis.plot_offset_map(pointer_pd, storage_path)  # offset map
+        dis.plot_raw_intensity(pointer_pd, ctrl_pd, storage_path)  # raw intensity
+        dis.plot_pb_factor(pointer_pd, storage_path)  # photobleaching factor
+        dis.plot_corrected_intensity(pointer_pd, storage_path)  # intensity after dual correction
+        dis.plot_normalized_frap(pointer_pd, storage_path)  # normalized FRAP curves
+        dis.plot_frap_fitting(pointer_pd, storage_path)  # normalized FRAP curves after filtering with fitting
+        # individual normalized FRAP curves with fitting
+    else:
+        # --------------------------
+        # OUTPUT
+        # --------------------------
+        print("### Export data ...")
+
+        storage_path = save_path
+        if not os.path.exists(storage_path):
+            os.makedirs(storage_path)
+        # data_log
+        data_log.to_csv('%s/data_log.txt' % storage_path, index=False, sep='\t')
 
 print("DONE")
