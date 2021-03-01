@@ -256,7 +256,7 @@ def get_t_half(half_int: float or int, int_tseries: list, real_time_post: list):
 
 
 def frap_analysis(pointer_pd: pd.DataFrame, max_t: int, acquire_time_tseries: list, real_time: list,
-                  frap_start_delay: int):
+                  frap_start_delay: int, frap_start_mode: str):
     """
     Analyze FRAP curve
 
@@ -273,6 +273,8 @@ def frap_analysis(pointer_pd: pd.DataFrame, max_t: int, acquire_time_tseries: li
                 e.g. [0.0, 0.09499999999999886, 0.17600000000000193, 0.25500000000000256, ...]
     :param frap_start_delay: int
                 delay compared with bleach_frame to determine the starting point of frap
+    :param frap_start_mode: str
+                only accepts 'delay' or 'min'
     :return: frap_pd: pd.DataFrame
                 add information: 'int_curve_nor', 'frap_start_frame', 'imaging_length', 'int_curve_pre',
                 'int_curve_post', 'int_curve_post_nor', 'real_time_post', 'pre_bleach_int', 'frap_start_int',
@@ -326,10 +328,13 @@ def frap_analysis(pointer_pd: pd.DataFrame, max_t: int, acquire_time_tseries: li
         min_int_frame_temp = pointer_pd['mean_int'][i].tolist().index(min_int_temp)
         min_int_frame.append(min_int_frame_temp)
         # frap curve starting point
-        if frap_start_delay > 0:
+        if frap_start_mode == 'delay':
             frap_start_frame_temp = pointer_pd['bleach_frame'][i] + frap_start_delay
         else:
-            frap_start_frame_temp = min_int_frame_temp
+            if min_int_frame_temp < (len(pointer_pd['mean_int'][i])-10):
+                frap_start_frame_temp = min_int_frame_temp
+            else:
+                frap_start_frame_temp = pointer_pd['bleach_frame'][i] + frap_start_delay
         frap_start_frame.append(frap_start_frame_temp)
         # imaging length of the frap curve after min_int_frame
         num_post = max_t - frap_start_frame_temp
