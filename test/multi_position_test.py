@@ -15,7 +15,7 @@ nr = 40
 nr_between_projector_checks = 2
 cal_exposure = 200
 cal_offset = 5
-n_curve = 200
+n_curve = 250
 
 # build up pycromanager bridge
 bridge = Bridge()
