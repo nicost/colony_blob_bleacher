@@ -87,10 +87,8 @@ DISPLAYS
 # --------------------------
 # paths
 # data_path = "C:\\Users\\NicoLocal\\Images\\Jess\\20201116-Nucleoli-bleaching-4x\\PythonAcq1\\AutoBleach_15"
-data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/" \
-            "20210226_CBB_nucleoliWTPhotobleachingConditionTest/10mW_50ms/D2/D2-Site_1_1"
-save_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/" \
-            "20210226_CBB_nucleoliWTPhotobleachingConditionTest/10mW_50ms/dataAnalysis/D2/D2-Site_1_1"
+data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/test/D2-Site_1_1"
+save_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/test/D2-Site_1_1/dataAnalysis/"
 
 # values for analysis
 data_c = 0
