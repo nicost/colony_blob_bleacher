@@ -15,6 +15,7 @@ nr = 40
 nr_between_projector_checks = 2
 cal_exposure = 200
 cal_offset = 5
+n_curve = 300
 
 # build up pycromanager bridge
 bridge = Bridge()
@@ -70,6 +71,8 @@ def snap_and_get_bleach_location(exposure, cutoff):
 
 pm = mm.positions()
 pos_list = pm.get_position_list()
+well = pos_list.get_position(0).get_label().split('-')[0]
+well_count = 0
 ds = mm.data().create_ram_datastore()
 count = 0
 
@@ -78,6 +81,15 @@ for idx in range(pos_list.get_number_of_positions()):
     dv = mm.displays().close_displays_for(ds)
     pos = pos_list.get_position(idx)
     pos.go_to_position(pos, mmc)
+
+    well_temp = pos.get_label().split('-')[0]
+    if well_temp == well:
+        if well_count >= n_curve:
+            continue
+    else:
+        well_count = 0
+        well = well_temp
+
     time.sleep(0.1)
     if count >= nr_between_projector_checks:
         calibrated, error = snap_and_get_bleach_location(cal_exposure, cal_offset)
@@ -109,6 +121,7 @@ for idx in range(pos_list.get_number_of_positions()):
 
         for region_list in [centered]:
             nr_shots = nr if len(region_list) >= (2 * nr) else int(len(region_list) / 2)
+            well_count += nr_shots
             shots = random.sample(region_list, nr_shots)
             # shots = region_list[0:10]
             for shot in shots:
@@ -122,4 +135,3 @@ for idx in range(pos_list.get_number_of_positions()):
             time.sleep(1)
 
 print("Done!")
-
