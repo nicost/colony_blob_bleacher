@@ -229,7 +229,8 @@ def label_watershed(obj: np.array, maxima_threshold):
     _, dis = medial_axis(obj, return_distance=True)
     maxima = extrema.h_maxima(dis, maxima_threshold)
     # maxima_threshold for Jess data = 1
-    # maxima_threshold for Jose data = 10
+    # maxima_threshold for Jose 60x data = 10
+    # maxima_threshold for Jose 40x data = 20
     maxima_mask = binary_dilation(maxima)
     for i in range(6):
         maxima_mask = binary_dilation(maxima_mask)
