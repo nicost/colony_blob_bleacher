@@ -18,6 +18,8 @@ min_size_nuclear = 15000
 max_size_nuclear = 130000
 min_size_cell = 50000
 max_size_cell = 1000000
+low_stain_mode = 'on'  # only accepts 'on' and 'off'
+watershed_mode = 'off'  # only accepts 'on' and 'off'
 
 name = 'G3BP1_SA50uM_5WGA009'
 imgs = nd2.ND2Reader('%s/%s.nd2' % (data_path, name))
