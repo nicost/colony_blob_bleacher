@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 
+
 """
 # ---------------------------------------------------------------------------------------------------
 # FUNCTIONS for PD.DATAFRAME/LIST/UMANAGER/NUMBER
@@ -20,6 +21,10 @@ pd.DataFrame related:
         FUNCTION: copy data from dataframe2 to dataframe1 based on common index
         SYNTAX:   copy_based_on_index(dataframe1: pd.DataFrame, dataframe2: pd.DataFrame,
                   index_name1: str, index_name2: str, column_lst1: list, column_lst2: list)
+    
+    make_full_lst
+        FUNCTION: combining all data from pd_lst with the same feature (column name) into a list
+        SYNTAX:   make_full_lst(pd_lst: list, feature: str)
                   
 List related:
 
@@ -31,6 +36,10 @@ List related:
     list_subtraction
         FUNCTION: subtract elements in two lists in an element wise manner
         SYNTAX:   list_subtraction(list1: list, list2: list)
+    
+    remove_elements
+        FUNCTION: remove elements in lst that does not exist in allowed_elements
+        SYNTAX:   remove_elements(lst: list, allowed_elements: list)
 
 uManager related:
 
@@ -65,7 +74,12 @@ Number related:
     find_closest
         FUNCTION: find closest spot
         SYNTAX:   find_closest(aim_x: int or float, aim_y: int or float, x_list: list, y_list: list)
-  
+
+File related:
+    
+    append_data
+        FUNCTION: copy f1 into f if n=0, else append content in f1 into f
+        SYNTAX:   append_data(f, f1, n: int)
 """
 
 # ---------------------------------------------------------------------------------------------------
@@ -139,6 +153,20 @@ def copy_based_on_index(dataframe1: pd.DataFrame, dataframe2: pd.DataFrame,
     return dataframe1
 
 
+def make_full_lst(pd_lst: list, feature: str):
+    """
+    Combining all data from pd_lst with the same feature (column name) into a list
+
+    :param pd_lst: list, list of a number of pd.DataFrame
+    :param feature: str, column name
+    :return:
+    """
+    out = []
+    for i in range(len(pd_lst)):
+        out = out + pd_lst[i][feature].tolist()
+    return out
+
+
 # replace values in some rows with other values in a dataframe
 # log_pd.loc[log_pd.x == 0, 'x'] = log_pd[log_pd['x'] == 0]['aim_x']
 # log_pd.loc[log_pd.y == 0, 'y'] = log_pd[log_pd['y'] == 0]['aim_y']
@@ -201,6 +229,22 @@ def list_subtraction(list1: list, list2: list):
         raise ValueError("length of two provided lists for subtraction do not match.")
 
     return list_subtracted
+
+
+def remove_elements(lst: list, allowed_elements: list):
+    """
+    Remove elements in lst that does not exist in allowed_elements
+
+    :param lst: list, list to be removed
+    :param allowed_elements: list, check list
+    :return:
+    """
+    out = []
+    for i in range(len(lst)):
+        if lst[i] in allowed_elements:
+            out.append(lst[i])
+    return out
+
 
 # ---------------------------------------------------------------------------------------------------
 # FUNCTIONS for UMANAGER
@@ -377,7 +421,19 @@ def find_closest(aim_x: int or float, aim_y: int or float, x_list: list, y_list:
     return x_closest, y_closest
 
 
-def append_data(f, f1, n):
+# ---------------------------------------------------------------------------------------------------
+# FUNCTIONS for FILE
+# ---------------------------------------------------------------------------------------------------
+
+def append_data(f, f1, n: int):
+    """
+    Copy f1 into f if n=0, else append content in f1 into f
+
+    :param f: file f
+    :param f1: file f1
+    :param n: position of file
+    :return:
+    """
     if n == 0:
         f.write(f1.read())
     else:
