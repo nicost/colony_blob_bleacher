@@ -87,8 +87,10 @@ DISPLAYS
 # --------------------------
 # paths
 # data_path = "C:\\Users\\NicoLocal\\Images\\Jess\\20201116-Nucleoli-bleaching-4x\\PythonAcq1\\AutoBleach_15"
-data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/test/D2-Site_1_1"
-save_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/test/D2-Site_1_1/dataAnalysis/"
+data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/" \
+            "20210302_CBB_nucleoliWTcellDensityTest/50k/D5/D5-Site_5_1"
+save_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/" \
+            "20210302_CBB_nucleoliWTcellDensityTest/dataAnalysis/50k/D5/D5-Site_5_1"
 
 # values for analysis
 data_c = 0
@@ -104,7 +106,7 @@ frap_start_delay = 4
 
 # modes
 mode_bleach_detection = 'single-offset'  # only accepts 'single-raw' or 'single-offset'
-frap_start_mode = 'delay'  # only accepts 'delay' or 'min'
+frap_start_mode = 'min'  # only accepts 'delay' or 'min'
 display_mode = 'Y'  # only accepts 'N' or 'Y'
 
 """
@@ -132,6 +134,8 @@ cb.t(0).p(0).c(0).z(0)
 max_t = store.get_max_indices().get_t()
 pixels_tseries = dat.get_pixels_tseries(store, cb, data_c)
 acquire_time_tseries, real_time = dat.get_time_tseries(store, cb)
+data_log['acquire_time'] = [acquire_time_tseries]
+data_log['real_time'] = [real_time]
 
 # --------------------------------------
 # ORGANELLE ANALYSIS based on time 0
@@ -427,10 +431,10 @@ if display_mode == 'Y':
         # Layer4: analysis spots
         # display bleach spots, color sorted based on corresponding nucleoli size
         # sort colormap based on analysis spots filtered
-        cmap2 = 'winter'
-        cmap2_rgba = dis.num_color_colormap(cmap2, len(pointer_pd))[2]
-        cmap2_napari = dis.sorted_num_color_colormap(cmap2_rgba, pointer_pd, 'nucleoli_size', 'bleach_spots')[0]
         if len(pointer_pd) != 0:
+            cmap2 = 'winter'
+            cmap2_rgba = dis.num_color_colormap(cmap2, len(pointer_pd))[2]
+            cmap2_napari = dis.sorted_num_color_colormap(cmap2_rgba, pointer_pd, 'nucleoli_size', 'bleach_spots')[0]
             viewer.add_image(label(bleach_spots), name='bleach spots', colormap=('winter woBg', cmap2_napari))
 
         # matplotlib display
