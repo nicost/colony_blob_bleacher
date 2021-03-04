@@ -2,7 +2,7 @@ import os
 import shutil
 
 data_source = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/" \
-            "20210226_CBB_nucleoliWTPhotobleachingConditionTest/10mW_50ms/"
+                "20210302_CBB_nucleoliWTcellDensityTest/100k"
 
 dirs = [x[0] for x in os.walk(data_source)]
 dirs.pop(0)
