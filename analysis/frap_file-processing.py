@@ -2,12 +2,12 @@ import os
 import shared.dataframe as dat
 
 data_source = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/" \
-            "20210226_CBB_nucleoliWTPhotobleachingConditionTest/10mW_50ms/dataAnalysis/F2/"
+              "20210302_CBB_nucleoliWTcellDensityTest/40k/dataAnalysis/E6"
 save_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Exp/" \
             "20210200_dataAnalysis_optimizingFRAPexpConditionUsingPCandNC/" \
-            "20210226_dataAnalysis_nucleoliWTPhotobleachingConditionTest"
+            "20210302_dataAnalysis_nucleoliWTcellDensityTest"
 
-name = '10mW_50ms-3'
+name = '40k_3'
 dirs = [x[0] for x in os.walk(data_source)]
 dirs.pop(0)
 num_dir = len(dirs)
