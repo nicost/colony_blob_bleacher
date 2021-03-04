@@ -13,7 +13,7 @@ import os
 
 # paths
 data_source = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/" \
-            "20210226_CBB_nucleoliWTPhotobleachingConditionTest/10mW_50ms/F2/"
+              "20210302_CBB_nucleoliWTcellDensityTest/100k/B6"
 
 # values for analysis
 data_c = 0
@@ -69,6 +69,8 @@ for s in range(len(dirs)):
     max_t = store.get_max_indices().get_t()
     pixels_tseries = dat.get_pixels_tseries(store, cb, data_c)
     acquire_time_tseries, real_time = dat.get_time_tseries(store, cb)
+    data_log['acquire_time'] = [acquire_time_tseries]
+    data_log['real_time'] = [real_time]
 
     # --------------------------------------
     # ORGANELLE ANALYSIS based on time 0
