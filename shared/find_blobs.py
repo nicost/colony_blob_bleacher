@@ -5,6 +5,7 @@ from skimage.morphology import extrema, binary_dilation, binary_erosion
 from skimage.filters import threshold_otsu, threshold_yen, threshold_local
 import shared.objects as obj
 from shared.objects import remove_large
+from scipy import ndimage
 
 """
 # ---------------------------------------------------------------------------------------------------
@@ -75,7 +76,7 @@ def find_blobs(pixels: np.array, binary_global: np.array, extreme_val: int, bg_v
     return merge
 
 
-def get_binary_global(pixels: np.array, threshold_method='na', min_size=5, max_size=1000):
+def get_binary_global(pixels: np.array, threshold_method='na', min_size=5, max_size=1000, local_param=21):
     """
     Calculate binary global thresholding image
 
@@ -89,6 +90,7 @@ def get_binary_global(pixels: np.array, threshold_method='na', min_size=5, max_s
                 'local-sg': otsu & local thresholding for stress granule identification
     :param min_size: minimum size of blobs
     :param max_size: maximum size of blobs
+    :param local_param: parameter for local thresholding
     :return: out: 0-and-1 np.array, binary global thresholding image
 
     """
@@ -114,7 +116,7 @@ def get_binary_global(pixels: np.array, threshold_method='na', min_size=5, max_s
         global_threshold_val = threshold_otsu(pixels)
         bg = pixels > global_threshold_val
         # apply local thresholding
-        local = threshold_local(pixels, 21)  # 21: specific for nucleoli
+        local = threshold_local(pixels, local_param)  # 21: specific for nucleoli
         out = pixels > local
         # remove large connected areas
         out = obj.remove_large(out, max_size)
@@ -130,12 +132,13 @@ def get_binary_global(pixels: np.array, threshold_method='na', min_size=5, max_s
         global_threshold_val = threshold_otsu(pixels)
         bg = pixels > global_threshold_val
         # apply local thresholding
-        local = threshold_local(pixels, 21)  # 21: specific for nucleoli
+        local = threshold_local(pixels, local_param)  # 21: specific for nucleoli
         out = pixels > local
         # remove large connected areas
         out = obj.remove_large(out, max_size)
         # combine with otsu thresholding to determine background region
         out[bg == 0] = 0
+        out = ndimage.binary_fill_holes(out)
 
     elif threshold_method == 'local-sg1':
         # use otsu thresholding to determine background region
