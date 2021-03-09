@@ -443,3 +443,10 @@ def append_data(f, f1, n: int):
                 f.write(f1_line[i])
 
     return 0
+
+
+def get_normalized(df: pd.DataFrame, feature: str, name: str):
+    temp0 = np.min(df[feature].tolist())
+    temp1 = df[feature].tolist()[len(df)-1]
+    df[name] = (df[feature]-temp0)/(temp1-temp0)
+    return df
