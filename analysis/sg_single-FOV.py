@@ -52,16 +52,17 @@ DISPLAYS
 # PARAMETERS ALLOW CHANGE
 # --------------------------
 # paths
-data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/20210100_SG_scoring/TimeCourse/ActD_CX_TC_1/"
+data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/20210224_SG_Top10_ArsTreatments/"\
+            "1235678910_1"
 save_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/20210100_SG_scoring/TimeCourse/dataAnalysis1"
 
 # values for analysis
 data_p = 0
-data_t = 0
-data_c = 0
-thresholding = 'local-sg'  # only accepts 'na', 'otsu', 'yen', 'local-nucleoli' and 'local-sg'
+data_t = 12
+data_c = 1
+thresholding = 'na'  # only accepts 'na', 'otsu', 'yen', 'local-nucleoli' and 'local-sg'
 min_size = 5
-max_size = 350
+max_size = 200
 
 # modes
 export_mode = 'N'
@@ -97,7 +98,7 @@ print("### Image analysis: calculate SG mask/pd ...")
 temp = store.get_image(cb.t(data_t).c(data_c).z(0).p(data_p).build())
 pix = np.reshape(temp.get_raw_pixels(), newshape=[temp.get_height(), temp.get_width()])
 
-sg = find_organelle(pix, thresholding, min_size=min_size, max_size=max_size)
+sg = find_organelle(pix, thresholding, min_size=min_size, max_size=max_size, local_param=21)
 label_sg = label(sg, connectivity=1)
 sg_pd = organelle_analysis(pix, sg, 'sg', 0)
 
