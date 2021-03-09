@@ -48,7 +48,7 @@ find_nuclear
 
 
 def find_organelle(pixels: np.array, global_thresholding='na', extreme_val=500, bg_val=200,
-                   min_size=5, max_size=1000):
+                   min_size=5, max_size=1000, local_param=21):
     """
     Find organelle (nucleoli or SG) from a given image.
 
@@ -80,6 +80,8 @@ def find_organelle(pixels: np.array, global_thresholding='na', extreme_val=500, 
                 The largest allowable organelle size.
                 nucleoli default: 1000
                 SG default: 350
+    :param local_param: int, optional (default: 21)
+                parameter for local thresholding
     :returns nucleoli_filtered: 0-and-1 np.array, same shape and type as input img
                 Binary array with found nucleoli labeled with 1.
     """
@@ -93,7 +95,7 @@ def find_organelle(pixels: np.array, global_thresholding='na', extreme_val=500, 
         raise ValueError("global thresholding method only accepts %s. Got %s" % (check_lst, global_thresholding))
 
     # find organelle
-    organelle = find_blobs(pixels, get_binary_global(pixels, global_thresholding, min_size, max_size),
+    organelle = find_blobs(pixels, get_binary_global(pixels, global_thresholding, min_size, max_size, local_param),
                            extreme_val, bg_val, max_size)
 
     # Filters:
