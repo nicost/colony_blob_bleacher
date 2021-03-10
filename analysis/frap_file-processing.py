@@ -1,11 +1,10 @@
 import os
 import shared.dataframe as dat
 
-data_source = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/" \
-              "20210302_CBB_nucleoliWTcellDensityTest/40k/dataAnalysis/E6"
-save_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Exp/" \
-            "20210200_dataAnalysis_optimizingFRAPexpConditionUsingPCandNC/" \
-            "20210302_dataAnalysis_nucleoliWTcellDensityTest"
+data_source = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/"\
+            "20210302_CBB_nucleoliWTcellDensityTest/40k/dataAnalysis1/E6"
+save_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/"\
+            "20210302_CBB_nucleoliWTcellDensityTest/40k/dataAnalysis1/"
 
 name = '40k_3'
 dirs = [x[0] for x in os.walk(data_source)]
