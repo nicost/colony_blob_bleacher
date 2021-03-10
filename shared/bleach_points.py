@@ -317,6 +317,7 @@ def frap_analysis(pointer_pd: pd.DataFrame, max_t: int, acquire_time_tseries: li
     plateau_int_nor = []  # int_plateau normalized with pre_bleach_int and min_int; mobile fraction
     t_half = []  # t-half
     slope = []  # initial slope of the recovery curve (relative intensity)
+    t_diff = []
 
     for i in range(len(pointer_pd)):
         # number of first frame after photobleaching (num_pre)
@@ -380,6 +381,11 @@ def frap_analysis(pointer_pd: pd.DataFrame, max_t: int, acquire_time_tseries: li
         else:
             slope_temp = np.nan
         slope.append(slope_temp)
+        # real time difference between photobleaching and next acquisition
+        time = pointer_pd['time'][i].split(' ')[1]
+        t_bleach = [float(time.split(':')[0]), float(time.split(':')[1]), float(time.split(':')[2])]
+        t_diff_temp = dat.get_time_diff(t_bleach, pointer_pd['bleach_frame'][i], acquire_time_tseries)
+        t_diff.append(t_diff_temp)
 
     frap_pd = pd.DataFrame({'int_curve_nor': mean_int_nor,
                             'min_int_frame': min_int_frame,
@@ -396,7 +402,8 @@ def frap_analysis(pointer_pd: pd.DataFrame, max_t: int, acquire_time_tseries: li
                             'plateau_int': plateau_int,
                             'mobile_fraction': plateau_int_nor,
                             't_half': t_half,
-                            'ini_slope': slope})
+                            'ini_slope': slope,
+                            't_diff': t_diff})
 
     return frap_pd
 
