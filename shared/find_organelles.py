@@ -1,7 +1,10 @@
-from skimage.segmentation import clear_border, random_walker
+from skimage.segmentation import clear_border, random_walker, watershed
 from shared.find_blobs import find_blobs, get_binary_global
 from shared.objects import remove_small, remove_large
 from skimage.measure import label, regionprops
+from skimage.filters import threshold_local, sobel, threshold_otsu
+from skimage.morphology import binary_dilation, binary_erosion
+import shared.analysis as ana
 import shared.warning as warn
 import numpy as np
 import pandas as pd
@@ -23,26 +26,36 @@ organelle_analysis
     FUNCTION: analyze object properties and return a pd.DataFrame table, for SG/nucleoli
     SYNTAX:   organelle_analysis(pixels: np.array, organelle: np.array, organelle_name: str, pos=0)
 
-find_nuclear
+find_nuclear_nucleoli
     FUNCTION: detect nuclear in nucleoli stain images
-    SYNTAX:   find_nuclear(pixels: np.array)
+    SYNTAX:   find_nuclear_nucleoli(pixels: np.array)
 
 nuclear_analysis
     FUNCTION: analyze nuclear properties and return a pd.DataFrame table
     SYNTAX:   nuclear_analysis(label_nuclear: np.array, nucleoli_pd: pd.DataFrame, pos=0)
 
+find_cell
+    FUNCTION: cell segmentation based on membrane/nuclear staining
+    SYNTAX:   find_cell(bg_pixels: np.array, mem_pixels: np.array, nuclear_pixels: np.array, with_boundary='N',
+              nuclear_local_threshold_size=701, min_size_nuclear=15000, max_size_nuclear=130000,
+              min_size_cell=50000, max_size_cell=300000)
+
+find_nuclear
+    FUNCTION: detect nuclear in nuclear stain image
+    SYNTAX:   find_nuclear(pixels: np.array, local_thresholding_size: int, min_size: int, max_size: int)
+
 """
 
 
 def find_organelle(pixels: np.array, global_thresholding='na', extreme_val=500, bg_val=200,
-                   min_size=5, max_size=1000):
+                   min_size=5, max_size=1000, local_param=21):
     """
     Find organelle (nucleoli or SG) from a given image.
 
     Expects pixels to be an array, and finds nucleoli objects using watershed by
     flooding approach with indicated global thresholding methods (supports 'na',
-    'otsu', 'yen', 'local-nucleoli' and 'local-sg').  Founded organelles are 
-    filtered by default location filter (filter out organelles located at the 
+    'otsu', 'yen', 'local-nucleoli' and 'local-sg', 'local-sg1').  Founded organelles
+    are filtered by default location filter (filter out organelles located at the
     boundary of the image) and size filter.
 
     :param pixels: np.array (non-negative int type)
@@ -67,6 +80,8 @@ def find_organelle(pixels: np.array, global_thresholding='na', extreme_val=500, 
                 The largest allowable organelle size.
                 nucleoli default: 1000
                 SG default: 350
+    :param local_param: int, optional (default: 21)
+                parameter for local thresholding
     :returns nucleoli_filtered: 0-and-1 np.array, same shape and type as input img
                 Binary array with found nucleoli labeled with 1.
     """
@@ -75,12 +90,12 @@ def find_organelle(pixels: np.array, global_thresholding='na', extreme_val=500, 
 
     # Check global thresholding options
     # Raise value error if not 'na', 'otsu' or 'yen'
-    check_lst = ['na', 'otsu', 'yen', 'local-nucleoli', 'local-sg']
+    check_lst = ['na', 'otsu', 'yen', 'local-nucleoli', 'local-sg', 'local-sg1']
     if global_thresholding not in check_lst:
         raise ValueError("global thresholding method only accepts %s. Got %s" % (check_lst, global_thresholding))
 
     # find organelle
-    organelle = find_blobs(pixels, get_binary_global(pixels, global_thresholding, min_size, max_size),
+    organelle = find_blobs(pixels, get_binary_global(pixels, global_thresholding, min_size, max_size, local_param),
                            extreme_val, bg_val, max_size)
 
     # Filters:
@@ -138,17 +153,18 @@ def organelle_analysis(pixels: np.array, organelle: np.array, organelle_name: st
     return organelle_pd
 
 
-def find_nuclear(pixels: np.array):
+def find_nuclear_nucleoli(pixels: np.array):
     """
     Detect nuclear in nucleoli stain images
 
     :param pixels: np.array, nucleoli stain image
     :return: label_nuclear_sort: np.array, grey scale labeled nuclear image
     """
+    bg_int = ana.get_bg_int([pixels])[0]
     # nuclear detection
     markers = np.zeros_like(pixels)
-    markers[pixels < 220] = 1
-    markers[pixels > 450] = 2
+    markers[pixels < (1.7 * bg_int)] = 1
+    markers[pixels > (3 * bg_int)] = 2
     seg = random_walker(pixels, markers)
     # nuclear binary mask
     nuclear = np.zeros_like(pixels)
@@ -156,7 +172,7 @@ def find_nuclear(pixels: np.array):
     # fill holes
     nuclear_fill = ndimage.binary_fill_holes(nuclear)
     # separate touching nuclei
-    label_nuclear = obj.label_watershed(nuclear_fill)
+    label_nuclear = obj.label_watershed(nuclear_fill, 1)
     # filter out:
     # 1) nuclear size < 1500
     # 2) nuclear touches boundary
@@ -192,3 +208,122 @@ def nuclear_analysis(label_nuclear: np.array, nucleoli_pd: pd.DataFrame, pos=0):
     nuclear_pd['num_nucleoli'] = num_nucleoli
 
     return nuclear_pd
+
+
+def find_cell(bg_pixels: np.array, mem_pixels: np.array, nuclear_pixels: np.array,
+              nuclear_local_threshold_size=701, min_size_nuclear=15000, max_size_nuclear=130000,
+              min_size_cell=50000, max_size_cell=300000, low_stain_mode='off', watershed_mode='on'):
+    """
+    Cell segmentation based on membrane/nuclear staining
+
+    :param bg_pixels: np.array, image for true background identification
+    :param mem_pixels: np.array, membrane staining image
+    :param nuclear_pixels: np.array, nuclear staining image
+    :param nuclear_local_threshold_size: running size for nuclear local thresholding (default = 701)
+    :param min_size_nuclear: minimum allowable nuclear size (default = 15000)
+    :param max_size_nuclear: maximum allowable nuclear size (default = 130000)
+    :param min_size_cell: minimum allowable cell size (default = 50000)
+    :param max_size_cell: maximum allowable cell size (default = 300000)
+    :param low_stain_mode: 'on' or 'off', if use background to capture more nuclei
+    :param watershed_mode: 'on' or 'off', if use watershed to cut neighbour nuclei
+    :return: seg: np.array, label image of segmented cells
+             seg_ft: np.array, label image of segmented cells excluding cells touching border
+    """
+    # identify true background
+    bg = ana.find_background(bg_pixels)
+
+    # identify nuclear
+    label_nuclear = find_nuclear(nuclear_pixels, nuclear_local_threshold_size, min_size_nuclear, max_size_nuclear,
+                                 low_stain_mode, watershed_mode)[1]
+
+    """# identify aggregates in membrane staining
+    bg_mem = ana.get_bg_int([mem_pixels])[0]
+    aggregates = mem_pixels > threshold_otsu(mem_pixels)
+    for i in range(3):
+        aggregates = binary_erosion(aggregates)
+    for i in range(3):
+        aggregates = binary_dilation(aggregates)
+    aggregates = obj.remove_small(aggregates, 1500)
+    label_aggregates = label(aggregates)
+    aggregates_prop = regionprops(label_aggregates)
+    for i in range(len(aggregates_prop)):
+        if (aggregates_prop[i].eccentricity > 0.95) | (aggregates_prop[i].convex_area > (2*aggregates_prop[i].area)):
+            aggregates[label_aggregates == aggregates_prop[i].label] = bg_mem
+
+    # identify cell boundary
+    mem_pixels_wo_aggregates = mem_pixels.copy()
+    mem_pixels_wo_aggregates[aggregates == 1] = 0
+    elevation_map = sobel(mem_pixels_wo_aggregates)"""
+
+    # identify cell boundary
+    elevation_map = sobel(mem_pixels)
+
+    # generate markers
+    markers = label_nuclear.copy()
+    markers[(bg == 1) & (label_nuclear == 0)] = np.amax(label_nuclear) + 1
+
+    # segment cells
+    seg = watershed(elevation_map, markers)
+    seg[seg == np.amax(label_nuclear) + 1] = 0
+
+    # fill holes
+    seg = obj.label_fill_holes(seg)
+
+    # filter cells based on size
+    seg = obj.label_resort(obj.label_remove_small(seg, min_size_cell))
+    seg = obj.label_resort(obj.label_remove_large(seg, max_size_cell))
+    seg_ft = obj.label_resort(clear_border(seg))
+
+    return seg, seg_ft
+
+
+def find_nuclear(pixels: np.array, local_thresholding_size: int, min_size: int, max_size: int, low_stain_mode: str,
+                 watershed_mode: str):
+    """
+    Detect nuclear in nuclear stain image
+
+    :param pixels: np.array, nuclear stain image
+    :param local_thresholding_size: int, running size for local thresholding, varies for different magnification etc.
+    :param min_size: minimum allowable nuclear size
+    :param max_size: maximum allowable nuclear size
+    :param low_stain_mode: 'on' or 'off', if use background to capture more nuclei
+    :param watershed_mode: 'on' or 'off', if use watershed to cut neighbour nuclei
+    :return: nuclear: np.array, 0-and-1, nuclear mask with nuclei identified
+             label_nuclear: np.array, labeled image of nuclear mask
+    """
+    # nuclear identification using local thresholding
+    local = threshold_local(pixels, local_thresholding_size)
+    # for Jose data under 60x objective, local_thresholding_size = 701
+    nuclei_local = pixels > local
+    for i in range(2):
+        nuclei_local = binary_erosion(nuclei_local)
+    for i in range(2):
+        nuclei_local = binary_dilation(nuclei_local)
+    nuclei_local = ndimage.binary_fill_holes(nuclei_local)
+    nuclei_local = remove_small(nuclei_local, min_size)
+    nuclei_local = remove_large(nuclei_local, max_size)
+    # for Jose data under 60x objective, min_size = 15000
+
+    if low_stain_mode == 'on':
+        # nuclear identification using background intensity
+        bg_int = ana.get_bg_int([pixels])[0]
+        nuclei_bg = pixels > 1.05*bg_int
+        nuclei_bg = ndimage.binary_fill_holes(nuclei_bg)
+        nuclei_bg = binary_erosion(nuclei_bg)
+        nuclei_bg = binary_dilation(nuclei_bg)
+        nuclei_bg = remove_small(nuclei_bg, min_size)
+        nuclei_bg = remove_large(nuclei_bg, max_size)
+
+        # nuclear mask
+        nuclear = np.zeros_like(pixels)
+        nuclear[nuclei_local == 1] = 1
+        nuclear[nuclei_bg == 1] = 1
+    else:
+        nuclear = nuclei_local
+
+    if watershed_mode == 'off':
+        label_nuclear = label(nuclear)
+    else:
+        label_nuclear = obj.label_resort(obj.label_watershed(nuclear, 20))
+
+    return nuclear, label_nuclear

@@ -4,6 +4,8 @@ from vispy.color import Colormap
 from matplotlib.colors import ListedColormap
 from matplotlib import pyplot as plt
 import pandas as pd
+from scipy.stats import ks_2samp
+import seaborn as sns
 
 """
 # ---------------------------------------------------------------------------------------------------
@@ -56,6 +58,24 @@ Specific output/display (save space in the main script):
         FUNCTION: plot and save normalized FRAP curves and corresponding single exponential fitting 
                   measured from good bleach spots (for FRAP analysis)
         SYNTAX:   plot_frap_fitting(pointer_pd: pd.DataFrame, storage_path: str)
+    
+    get_p
+        FUNCTION: calculate pair wise KS test p-value for -ln(p) plot
+        SYNTAX:   get_p(data1: pd.DataFrame, data2: pd.DataFrame, feature: str, inc: int, limit: int, repeat: int)
+    
+    get_x
+        FUNCTION: create pair-wise x value for -ln(p) plot
+        SYNTAX:   get_x(inc: int, limit: int, repeat: int, offset: float)
+    
+    plot_minus_ln_p
+        FUNCTION: generate -ln(p) plot for given feature
+        SYNTAX:   plot_minus_ln_p(inc: int, limit: int, repeat: int, feature: str, pd_WT: pd.DataFrame, 
+                  pd_WT1: pd.DataFrame, pd_WT2: pd.DataFrame, pd_WT3: pd.DataFrame, pd_sample: pd.DataFrame, 
+                  save_path: str, sample_name: str)
+    
+    plot_violin
+        FUNCTION: generate violin plot for given feature
+        SYNTAX:   plot_violin(feature: str, pd_data: pd.DataFrame, save_path: str, sample_name: str)
     
 """
 
@@ -159,7 +179,7 @@ def plot_offset_map(pointer_pd: pd.DataFrame, storage_path: str):
     n = 0
     plt.subplots(figsize=(6, 4))
     for i in range(len(pointer_pd)):
-        if pointer_pd['frap_filter'][i] == 0:
+        if pointer_pd['frap_filter_single_exp'][i] == 0:
             if m == 0:
                 plt.plot([0, pointer_pd['x_diff'][i]], [0, pointer_pd['y_diff'][i]], color='#1E90FF', alpha=0.5,
                          label='filtered ones')
@@ -180,6 +200,7 @@ def plot_offset_map(pointer_pd: pd.DataFrame, storage_path: str):
     plt.ylabel('y offset (pixel)')
     plt.legend(loc=2, bbox_to_anchor=(0.02, 0.99))
     plt.savefig('%s/offset_map.pdf' % storage_path)
+    plt.close()
 
 
 def plot_raw_intensity(pointer_pd: pd.DataFrame, ctrl_pd: pd.DataFrame, storage_path: str):
@@ -207,32 +228,34 @@ def plot_raw_intensity(pointer_pd: pd.DataFrame, ctrl_pd: pd.DataFrame, storage_
     n = 0
     j = 0
     plt.subplots(figsize=(6, 4))
-    plt.plot(pointer_pd['bg_int'][0], color=(0, 0, 0), alpha=0.7, label='bg')
-    if ~np.isnan(pointer_pd['bg_linear_a'][0]):
-        plt.plot(pointer_pd['bg_linear_fit'][0], '--', color=(0, 0, 0), alpha=0.7)
-    for i in range(len(ctrl_pd)):
-        if j == 0:
-            plt.plot(ctrl_pd['raw_int'][i], color=(0.7, 0.7, 0.7), alpha=0.5, label='ctrl')
-            j = j + 1
-        else:
-            plt.plot(ctrl_pd['raw_int'][i], color=(0.7, 0.7, 0.7), alpha=0.5)
-    for i in range(len(pointer_pd)):
-        if pointer_pd['frap_filter'][i] == 0:
-            if m == 0:
-                plt.plot(pointer_pd['raw_int'][i], color='#1E90FF', alpha=0.7, label='filtered ones')
-                m = m + 1
+    if len(pointer_pd) != 0:
+        plt.plot(pointer_pd['bg_int'][0], color=(0, 0, 0), alpha=0.7, label='bg')
+        if ~np.isnan(pointer_pd['bg_linear_a'][0]):
+            plt.plot(pointer_pd['bg_linear_fit'][0], '--', color=(0, 0, 0), alpha=0.7)
+        for i in range(len(ctrl_pd)):
+            if j == 0:
+                plt.plot(ctrl_pd['raw_int'][i], color=(0.7, 0.7, 0.7), alpha=0.5, label='ctrl')
+                j = j + 1
             else:
-                plt.plot(pointer_pd['raw_int'][i], color='#1E90FF', alpha=0.7)
-        else:
-            if n == 0:
-                plt.plot(pointer_pd['raw_int'][i], color=(0.85, 0.35, 0.25), alpha=0.7, label='good ones')
-                n = n + 1
+                plt.plot(ctrl_pd['raw_int'][i], color=(0.7, 0.7, 0.7), alpha=0.5)
+        for i in range(len(pointer_pd)):
+            if pointer_pd['frap_filter_single_exp'][i] == 0:
+                if m == 0:
+                    plt.plot(pointer_pd['raw_int'][i], color='#1E90FF', alpha=0.7, label='filtered ones')
+                    m = m + 1
+                else:
+                    plt.plot(pointer_pd['raw_int'][i], color='#1E90FF', alpha=0.7)
             else:
-                plt.plot(pointer_pd['raw_int'][i], color=(0.85, 0.35, 0.25), alpha=0.7)
-    plt.xlabel('time (frame)')
-    plt.ylabel('raw intensity (AU)')
-    plt.legend(loc=2, bbox_to_anchor=(0.65, 0.99))
-    plt.savefig('%s/raw_intensity.pdf' % storage_path)
+                if n == 0:
+                    plt.plot(pointer_pd['raw_int'][i], color=(0.85, 0.35, 0.25), alpha=0.7, label='good ones')
+                    n = n + 1
+                else:
+                    plt.plot(pointer_pd['raw_int'][i], color=(0.85, 0.35, 0.25), alpha=0.7)
+        plt.xlabel('time (frame)')
+        plt.ylabel('raw intensity (AU)')
+        plt.legend(loc=2, bbox_to_anchor=(0.65, 0.99))
+        plt.savefig('%s/raw_intensity.pdf' % storage_path)
+        plt.close()
 
 
 def plot_pb_factor(pointer_pd: pd.DataFrame, storage_path: str):
@@ -251,12 +274,14 @@ def plot_pb_factor(pointer_pd: pd.DataFrame, storage_path: str):
 
     """
     plt.subplots(figsize=(6, 4))
-    plt.plot(pointer_pd['pb_factor'][0], color=(0.8, 0.8, 0.8))
-    if ~np.isnan(pointer_pd['pb_single_exp_decay_a'][0]):
-        plt.plot(pointer_pd['pb_single_exp_decay_fit'][0], '--', color=(0.8, 0.8, 0.8))
-    plt.xlabel('time (frame)')
-    plt.ylabel('photobleaching factor')
-    plt.savefig('%s/pb_factor.pdf' % storage_path)
+    if len(pointer_pd) != 0:
+        plt.plot(pointer_pd['pb_factor'][0], color=(0.8, 0.8, 0.8))
+        if ~np.isnan(pointer_pd['pb_single_exp_decay_a'][0]):
+            plt.plot(pointer_pd['pb_single_exp_decay_fit'][0], '--', color=(0.8, 0.8, 0.8))
+        plt.xlabel('time (frame)')
+        plt.ylabel('photobleaching factor')
+        plt.savefig('%s/pb_factor.pdf' % storage_path)
+        plt.close()
 
 
 def plot_corrected_intensity(pointer_pd: pd.DataFrame, storage_path: str):
@@ -277,7 +302,7 @@ def plot_corrected_intensity(pointer_pd: pd.DataFrame, storage_path: str):
     n = 0
     plt.subplots(figsize=(6, 4))
     for i in range(len(pointer_pd)):
-        if pointer_pd['frap_filter'][i] == 0:
+        if pointer_pd['frap_filter_single_exp'][i] == 0:
             if m == 0:
                 plt.plot(pointer_pd['mean_int'][i], color='#1E90FF', alpha=0.7, label='filtered ones')
                 m = m + 1
@@ -293,6 +318,7 @@ def plot_corrected_intensity(pointer_pd: pd.DataFrame, storage_path: str):
     plt.ylabel('bg/pb corrected intensity (AU)')
     plt.legend(loc=2, bbox_to_anchor=(0.65, 0.99))
     plt.savefig('%s/double_corrected_intensity.pdf' % storage_path)
+    plt.close()
 
 
 def plot_normalized_frap(pointer_pd: pd.DataFrame, storage_path: str):
@@ -313,7 +339,7 @@ def plot_normalized_frap(pointer_pd: pd.DataFrame, storage_path: str):
     n = 0
     plt.subplots(figsize=(6, 4))
     for i in range(len(pointer_pd)):
-        if pointer_pd['frap_filter'][i] == 0:
+        if pointer_pd['frap_filter_single_exp'][i] == 0:
             if m == 0:
                 plt.plot(pointer_pd['real_time_post'][i], pointer_pd['int_curve_post_nor'][i],
                          color='#1E90FF', alpha=0.7, label='filtered ones')
@@ -333,6 +359,7 @@ def plot_normalized_frap(pointer_pd: pd.DataFrame, storage_path: str):
     plt.ylabel('normalized intensity (AU)')
     plt.legend(loc=2, bbox_to_anchor=(0.02, 0.99))
     plt.savefig('%s/normalized_frap_curves.pdf' % storage_path)
+    plt.close()
 
 
 def plot_frap_fitting(pointer_pd: pd.DataFrame, storage_path: str):
@@ -354,26 +381,137 @@ def plot_frap_fitting(pointer_pd: pd.DataFrame, storage_path: str):
     :param storage_path: str, directory to save image
 
     """
-    cmap1 = 'viridis'
-    cmap1_rgba = num_color_colormap(cmap1, len(pointer_pd))[2]
-    plt.subplots(figsize=(6, 4))
-    for i in range(len(pointer_pd)):
-        if pointer_pd['frap_filter'][i] == 1:
-            plt.plot(pointer_pd['real_time_post'][i], pointer_pd['int_curve_post_nor'][i],
-                     color=cmap1_rgba[i + 1], alpha=0.7)
-            plt.plot(pointer_pd['real_time_post'][i], pointer_pd['single_exp_fit'][i], '--',
-                     color=cmap1_rgba[i + 1], alpha=0.7)
-    plt.xlabel('time (s)')
-    plt.ylabel('normalized intensity (AU)')
-    plt.savefig('%s/normalized_frap_curves_filtered.pdf' % storage_path)
+    if len(pointer_pd) != 0:
+        cmap1 = 'viridis'
+        cmap1_rgba = num_color_colormap(cmap1, len(pointer_pd))[2]
+        cmap2_rgba = num_color_colormap(cmap1, 6)[2]
+        plt.subplots(figsize=(6, 4))
+        for i in range(len(pointer_pd)):
+            if pointer_pd['frap_filter_single_exp'][i] == 1:
+                plt.plot(pointer_pd['real_time_post'][i], pointer_pd['int_curve_post_nor'][i],
+                         color=cmap1_rgba[i + 1], alpha=0.7)
+                plt.plot(pointer_pd['real_time_post'][i], pointer_pd['single_exp_fit'][i], '--',
+                         color=cmap1_rgba[i + 1], alpha=0.7)
+        plt.xlabel('time (s)')
+        plt.ylabel('normalized intensity (AU)')
+        plt.savefig('%s/normalized_frap_curves_filtered.pdf' % storage_path)
+        plt.close()
 
-    for i in range(len(pointer_pd)):
-        if pointer_pd['frap_filter'][i] == 1:
+        for i in range(len(pointer_pd)):
             plt.subplots(figsize=(6, 4))
-            plt.plot(pointer_pd['real_time_post'][i], pointer_pd['int_curve_post_nor'][i],
-                     color=cmap1_rgba[i + 1], alpha=0.7)
-            plt.plot(pointer_pd['real_time_post'][i], pointer_pd['single_exp_fit'][i], '--',
-                     color=cmap1_rgba[i + 1], alpha=0.7)
+            if pointer_pd['frap_filter_single_exp'][i] == 1:
+                plt.plot(pointer_pd['real_time_post'][i], pointer_pd['int_curve_post_nor'][i],
+                         color=(0.85, 0.35, 0.25), alpha=0.7)
+            else:
+                plt.plot(pointer_pd['real_time_post'][i], pointer_pd['int_curve_post_nor'][i],
+                         color='#1E90FF', alpha=0.7)
+            if pointer_pd['frap_filter_single_exp'][i] == 1:
+                plt.plot(pointer_pd['real_time_post'][i], pointer_pd['single_exp_fit'][i], '--',
+                         color=cmap2_rgba[1], alpha=0.7, label='single_exp')
+            """if pointer_pd['frap_filter_soumpasis'][i] == 1:
+                plt.plot(pointer_pd['real_time_post'][i], pointer_pd['soumpasis_fit'][i], '--',
+                         color=cmap2_rgba[2], alpha=0.7, label='soumpasis')
+            if pointer_pd['frap_filter_double_exp'][i] == 1:
+                plt.plot(pointer_pd['real_time_post'][i], pointer_pd['double_exp_fit'][i], '--',
+                         color=cmap2_rgba[3], alpha=0.7, label='double_exp')
+            if pointer_pd['frap_filter_ellenberg'][i] == 1:
+                plt.plot(pointer_pd['real_time_post'][i], pointer_pd['ellenberg_fit'][i], '--',
+                         color=cmap2_rgba[4], alpha=0.7, label='ellenberg')
+            if pointer_pd['frap_filter_optimal'][i] == 1:
+                plt.plot(pointer_pd['real_time_post'][i], pointer_pd['optimal_fit'][i], '--',
+                         color=cmap2_rgba[5], alpha=0.7, label='optimal')"""
             plt.xlabel('time (s)')
             plt.ylabel('normalized intensity (AU)')
+            plt.legend(loc=2, bbox_to_anchor=(0.02, 0.99))
             plt.savefig('%s/frap_curves_filtered_%d.pdf' % (storage_path, i))
+            plt.close()
+
+
+def get_p(data1: pd.DataFrame, data2: pd.DataFrame, feature: str, inc: int, limit: int, repeat: int):
+    """
+    Calculate pair wise KS test p-value for -ln(p) plot
+
+    :param data1: pd.DataFrame, data1
+    :param data2: pd.DataFrame, data2
+    :param feature: str, comparing feature, column name
+    :param inc: int, increment (generally 5)
+    :param limit: int, upper limit of the plot
+    :param repeat: int, how many runs to be calculated per condition (generally 50)
+    :return: out: list, list of p-value
+    """
+    out = []
+    for i in np.arange(inc, limit, inc):
+        for j in range(repeat):
+            p = -np.log(ks_2samp(data1[feature].sample(n=i).tolist(), data2[feature].sample(n=i).tolist())[1])
+            out.append(p)
+    return out
+
+
+def get_x(inc: int, limit: int, repeat: int, offset: float):
+    """
+    Create pair-wise x value for -ln(p) plot
+
+    :param inc: int, increment (generally 5)
+    :param limit: int, upper limit of the plot
+    :param repeat: int, how many runs to be calculated per condition (generally 50)
+    :param offset: float, offset applied to avoid different datasets overlapping
+    :return: out: list, list of x values
+    """
+    out = []
+    for i in np.arange(inc, limit, inc):
+        for j in range(repeat):
+            x = i+offset
+            out.append(x)
+    return out
+
+
+def plot_minus_ln_p(inc: int, limit: int, repeat: int, feature: str, pd_WT: pd.DataFrame, pd_WT1: pd.DataFrame,
+                    pd_WT2: pd.DataFrame, pd_WT3: pd.DataFrame, pd_sample: pd.DataFrame, save_path: str,
+                    sample_name: str):
+    """
+    Generate -ln(p) plot for given feature
+
+    :param inc: int, increment (generally 5)
+    :param limit: int, upper limit of the plot
+    :param repeat: int, how many runs to be calculated per condition (generally 50)
+    :param feature: str, comparing feature, column name
+    :param pd_WT: pd.DataFrame, total wild type sample (generated from multiple wells)
+    :param pd_WT1: pd.DataFrame, negative control WT1
+    :param pd_WT2: pd.DataFrame, negative control WT2
+    :param pd_WT3: pd.DataFrame, negative control WT3
+    :param pd_sample: pd.DataFrame, treatment sample
+    :param save_path: str, save location
+    :param sample_name: str, treatment sample name
+    :return:
+    """
+    x = np.arange(limit + 5)
+    plt.figure(figsize=(15, 4))
+    plt.scatter(get_x(inc, limit, repeat, -1), get_p(pd_WT1, pd_WT, feature, inc, limit, repeat),
+                alpha=0.5, s=5, c='#40E0D0')
+    plt.scatter(get_x(inc, limit, repeat, -0.5), get_p(pd_WT2, pd_WT, feature, inc, limit, repeat),
+                alpha=0.5, s=5, c='#48D1CC')
+    plt.scatter(get_x(inc, limit, repeat, 0), get_p(pd_WT3, pd_WT, feature, inc, limit, repeat),
+                alpha=0.5, s=5, c='#00CED1')
+    plt.scatter(get_x(inc, limit, repeat, 0.5), get_p(pd_sample, pd_WT, feature, inc, limit, repeat),
+                alpha=0.5, s=5, c='#FF4500')
+    plt.plot(x, 0 * x + 5, linestyle='--', color='#696969')
+    plt.xlabel('number of traces')
+    plt.ylabel('mobile fraction  -ln(KS p-value)')
+    plt.savefig('%s/%s_%s_p.pdf' % (save_path, sample_name, feature))
+    plt.close()
+
+
+def plot_violin(feature: str, pd_data: pd.DataFrame, save_path: str, sample_name: str):
+    """
+    Generate violin plot for given feature
+
+    :param feature: str, comparing feature, column name
+    :param pd_data: pd.DataFrame, all the data
+    :param save_path: str, save location
+    :param sample_name: str, treatment sample name
+    :return:
+    """
+    plt.figure(figsize=(12, 4), dpi=80)
+    sns.violinplot(x='sample', y=feature, data=pd_data, notch=False)
+    plt.savefig('%s/%s_%s.pdf' % (save_path, sample_name, feature))
+    plt.close()

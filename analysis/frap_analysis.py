@@ -3,13 +3,14 @@ import pandas as pd
 import napari
 from pycromanager import Bridge
 from matplotlib.backends.qt_compat import QtCore, QtWidgets
+
 if QtCore.qVersion() >= "5.":
     from matplotlib.backends.backend_qt5agg import FigureCanvas
 else:
     from matplotlib.backends.backend_qt4agg import FigureCanvas
 from matplotlib.figure import Figure
 from vispy.color import Colormap
-from shared.find_organelles import find_organelle, organelle_analysis, find_nuclear, nuclear_analysis
+from shared.find_organelles import find_organelle, organelle_analysis, find_nuclear_nucleoli, nuclear_analysis
 from skimage.measure import label
 import shared.analysis as ana
 import shared.dataframe as dat
@@ -64,7 +65,7 @@ DISPLAYS
     # paths
     data_path: directory of uManager data
     save_path: primary directory for output saving
-    
+
     # values for analysis
     data_c: channel to be analyzed
     pos: position of the given FOV in multi-image dataset, default = 0
@@ -74,7 +75,7 @@ DISPLAYS
     max_size: the largest allowable nucleoli size
     num_dilation: number of dilation used to generate bleach spots, determines size of bleach spots
         default = 3
-    
+
     # modes
     mode_bleach_detection: bleach spots detection modes; only accept 'single-raw' or 'single-offset'
     display_mode: displays stitched images in napari or not; only accepts 'N' or 'Y'
@@ -86,10 +87,10 @@ DISPLAYS
 # --------------------------
 # paths
 # data_path = "C:\\Users\\NicoLocal\\Images\\Jess\\20201116-Nucleoli-bleaching-4x\\PythonAcq1\\AutoBleach_15"
-data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/" \
-            "20201216_CBB_nucleoliBleachingTest_drugTreatment/Ctrl-2DG-CCCP-36pos_partial/exp_111/"
-save_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/" \
-            "20201216_CBB_nucleoliBleachingTest_drugTreatment/Ctrl-2DG-CCCP-36pos_partial/exp_111/"
+data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/" \
+            "20210302_CBB_nucleoliWTcellDensityTest/50k/D4/D4-Site_0_1"
+save_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/" \
+            "20210302_CBB_nucleoliWTcellDensityTest/50k/dataAnalysis1/D4/D4-Site_0_1"
 
 # values for analysis
 data_c = 0
@@ -98,13 +99,15 @@ thresholding = 'local-nucleoli'
 # global thresholding method; choose in between 'na','otsu','yen', 'local-nucleoli' and 'local-sg'
 min_size = 10  # minimum nucleoli size; default = 10
 max_size = 1000  # maximum nucleoli size; default = 1000;
-                 # larger ones are generally cells without nucleoli
+# larger ones are generally cells without nucleoli
 num_dilation = 3  # number of dilation from the coordinate;
-                  # determines analysis size of the analysis spots; default = 3
+# determines analysis size of the analysis spots; default = 3
+frap_start_delay = 4
 
 # modes
 mode_bleach_detection = 'single-offset'  # only accepts 'single-raw' or 'single-offset'
-display_mode = 'N'  # only accepts 'N' or 'Y'
+frap_start_mode = 'min'  # only accepts 'delay' or 'min'
+display_mode = 'Y'  # only accepts 'N' or 'Y'
 
 """
 # ---------------------------------------------------------------------------------------------------
@@ -131,6 +134,8 @@ cb.t(0).p(0).c(0).z(0)
 max_t = store.get_max_indices().get_t()
 pixels_tseries = dat.get_pixels_tseries(store, cb, data_c)
 acquire_time_tseries, real_time = dat.get_time_tseries(store, cb)
+data_log['acquire_time'] = [acquire_time_tseries]
+data_log['real_time'] = [real_time]
 
 # --------------------------------------
 # ORGANELLE ANALYSIS based on time 0
@@ -144,7 +149,7 @@ temp = store.get_image(cb.c(data_c).t(0).build())
 pix = np.reshape(temp.get_raw_pixels(), newshape=[temp.get_height(), temp.get_width()])
 
 # nuclear detection
-label_nuclear = find_nuclear(pix)
+label_nuclear = find_nuclear_nucleoli(pix)
 data_log['num_nuclei_detected'] = [np.amax(label_nuclear)]
 print("Found %d nuclei." % data_log['num_nuclei_detected'][0])
 
@@ -183,7 +188,7 @@ log_pd.columns = ['time', 'aim_x', 'aim_y']  # reformat log_pd
 log_pd['bleach_frame'] = dat.get_frame(log_pd['time'], acquire_time_tseries)
 
 # get bleach spot coordinate
-coordinate_pd = ble.get_bleach_spots_coordinates(log_pd, store, cb, data_c, mode_bleach_detection)
+coordinate_pd = ble.get_bleach_spots_coordinates(log_pd, store, cb, data_c, mode_bleach_detection, frap_start_delay)
 log_pd = pd.concat([log_pd, coordinate_pd], axis=1)
 
 # link pointer with corresponding nucleoli
@@ -218,6 +223,7 @@ pointer_pd['raw_int'] = ana.get_intensity(bleach_spots, pixels_tseries)
 ctrl_spots_int_tseries = ana.get_intensity(ctrl_spots, pixels_tseries)
 ctrl_pd = pd.DataFrame({'ctrl_spots': np.arange(0, num_ctrl_spots, 1), 'raw_int': ctrl_spots_int_tseries})
 
+print("### Image analysis: background correction ...")
 # background intensity measurement
 bg_int_tseries = ana.get_bg_int(pixels_tseries)
 pointer_pd['bg_int'] = [bg_int_tseries] * len(pointer_pd)
@@ -237,19 +243,36 @@ else:
 pointer_pd['bg_cor_int'] = ana.bg_correction(pointer_pd['raw_int'], bg)
 ctrl_pd['bg_cor_int'] = ana.bg_correction(ctrl_pd['raw_int'], bg)
 
+# filter control traces
+filter_ctrl = []
+for i in range(len(ctrl_pd)):
+    ctrl_int = ctrl_pd['bg_cor_int'][i]
+    if (max(ctrl_int)-min(ctrl_int))/max(ctrl_int) > 0.4:
+        filter_ctrl.append(0)
+    else:
+        filter_ctrl.append(1)
+ctrl_pd['filter'] = filter_ctrl
+ctrl_pd_ft = ctrl_pd[ctrl_pd['filter'] == 1].reset_index()
+pointer_pd['num_ctrl_spots_ft'] = [len(ctrl_pd_ft)] * len(pointer_pd)
+data_log['num_ctrl_spots'] = len(ctrl_pd_ft)
+
+print("### Image analysis: photobleaching correction ...")
 # photobleaching factor calculation
-if num_ctrl_spots != 0:
+if len(ctrl_pd_ft) != 0:
     # calculate photobleaching factor
-    pb_factor = ana.get_pb_factor(ctrl_pd['bg_cor_int'])
+    pb_factor = ana.get_pb_factor(ctrl_pd_ft['bg_cor_int'])
+
     pointer_pd['pb_factor'] = [pb_factor] * len(pointer_pd)
-    print("%d ctrl points are used to correct photobleaching." % len(ctrl_pd))
+    print("%d ctrl points are used to correct photobleaching." % len(ctrl_pd_ft))
 
     # pb_factor fitting with single exponential decay
     pb_fit = mat.fitting_single_exp_decay(np.arange(0, len(pb_factor), 1), pb_factor)
     pointer_pd = dat.add_columns(pointer_pd, ['pb_single_exp_decay_fit', 'pb_single_exp_decay_r2',
-                                              'pb_single_exp_decay_a', 'pb_single_exp_decay_b'],
+                                              'pb_single_exp_decay_a', 'pb_single_exp_decay_b',
+                                              'pb_single_exp_decay_c'],
                                  [[pb_fit[0]] * len(pointer_pd), [pb_fit[1]] * len(pointer_pd),
-                                  [pb_fit[2]] * len(pointer_pd), [pb_fit[3]] * len(pointer_pd)])
+                                  [pb_fit[2]] * len(pointer_pd), [pb_fit[3]] * len(pointer_pd),
+                                  [pb_fit[4]] * len(pointer_pd)])
 
     # photobleaching correction
     if np.isnan(pb_fit[2]):
@@ -258,64 +281,116 @@ if num_ctrl_spots != 0:
         pb = pb_fit[0]
     pointer_pd['mean_int'] = ana.pb_correction(pointer_pd['bg_cor_int'], pb)
 
-# normalize frap curve and measure mobile fraction and t-half based on curve itself
-frap_pd = ble.frap_analysis(pointer_pd, max_t, acquire_time_tseries, real_time)
-pointer_pd = pd.concat([pointer_pd, frap_pd], axis=1)
+    # normalize frap curve and measure mobile fraction and t-half based on curve itself
+    frap_pd = ble.frap_analysis(pointer_pd, max_t, acquire_time_tseries, real_time, frap_start_delay, frap_start_mode)
+    pointer_pd = pd.concat([pointer_pd, frap_pd], axis=1)
 
-# curve fitting with single exponential function
-frap_fit_pd = mat.frap_fitting_single_exp(pointer_pd['real_time_post'], pointer_pd['int_curve_post_nor'])
-pointer_pd = pd.concat([pointer_pd, frap_fit_pd], axis=1)
+    # --------------------------------------------------
+    # FRAP CURVE FITTING
+    # --------------------------------------------------
+    print("### Imaging analysis: curve fitting ...")
 
-# filter frap curves
-pointer_pd = ble.frap_filter(pointer_pd)
-pointer_ft_pd = pointer_pd[pointer_pd['frap_filter'] == 1]
-data_log['num_frap_curves'] = [len(pointer_ft_pd)]
-print("%d spots passed filters for FRAP curve quality control." % data_log['num_frap_curves'][0])
+    # curve fitting with linear to determine initial slope
+    linear_fit_pd = mat.frap_fitting_linear(pointer_pd['real_time_post'], pointer_pd['int_curve_post_nor'])
+    pointer_pd = pd.concat([pointer_pd, linear_fit_pd], axis=1)
 
-# --------------------------
-# OUTPUT
-# --------------------------
-print("### Export data ...")
+    # curve fitting with single exponential function
+    single_exp_fit_pd = mat.frap_fitting_single_exp(pointer_pd['real_time_post'],
+                                                    pointer_pd['int_curve_post_nor'], pointer_pd['sigma'])
+    pointer_pd = pd.concat([pointer_pd, single_exp_fit_pd], axis=1)
 
-storage_path = save_path
-if not os.path.exists(storage_path):
-    os.makedirs(storage_path)
+    # curve fitting with soumpasis function
+    soumpasis_fit_pd = mat.frap_fitting_soumpasis(pointer_pd['real_time_post'],
+                                                  pointer_pd['int_curve_post_nor'], pointer_pd['sigma'])
+    pointer_pd = pd.concat([pointer_pd, soumpasis_fit_pd], axis=1)
 
-# measurements
-# data_log
-data_log.to_csv('%s/data_log.txt' % storage_path, index=False, sep='\t')
-# full dataset of all bleach spots
-pointer_pd.to_csv('%s/data_full.txt' % storage_path, index=False, sep='\t')
-# dataset of control spots
-ctrl_pd.to_csv('%s/data_ctrl.txt' % storage_path, index=False, sep='\t')
-# dataset of nuclear
-nuclear_pd.to_csv('%s/data_nuclear.txt' % storage_path, index=False, sep='\t')
-# dataset of nucleoli
-nucleoli_pd.to_csv('%s/data_nucleoli.txt' % storage_path, index=False, sep='\t')
+    # curve fitting with double exponential function
+    double_exp_fit_pd = mat.frap_fitting_double_exp(pointer_pd['real_time_post'],
+                                                    pointer_pd['int_curve_post_nor'], pointer_pd['sigma'])
+    pointer_pd = pd.concat([pointer_pd, double_exp_fit_pd], axis=1)
 
-# simplified dataset of bleach spots after FRAP curve quality control
-pointer_out = pd.DataFrame({'bleach_spots': pointer_ft_pd['bleach_spots'],
-                            'x': pointer_ft_pd['x'],
-                            'y': pointer_ft_pd['y'],
-                            'nucleoli': pointer_ft_pd['nucleoli'],
-                            'nucleoli_size': pointer_ft_pd['nucleoli_size'],
-                            'nucleoli_mean_int': pointer_ft_pd['nucleoli_mean_int'],
-                            'bleach_frame': pointer_ft_pd['bleach_frame'],
-                            'pre_bleach_int': pointer_ft_pd['pre_bleach_int'],
-                            'start_int': pointer_ft_pd['frap_start_int'],
-                            'single_exp_r2': pointer_ft_pd['single_exp_r2'],
-                            'single_exp_mobile_fraction': pointer_ft_pd['single_exp_mobile_fraction'],
-                            'single_exp_t_half': pointer_ft_pd['single_exp_t_half']})
-pointer_out.to_csv('%s/data.txt' % storage_path, index=False, sep='\t')
+    # curve fitting with ellenberg function
+    ellenberg_fit_pd = mat.frap_fitting_ellenberg(pointer_pd['real_time_post'],
+                                                  pointer_pd['int_curve_post_nor'], pointer_pd['sigma'])
+    pointer_pd = pd.concat([pointer_pd, ellenberg_fit_pd], axis=1)
 
-# images
-dis.plot_offset_map(pointer_pd, storage_path)  # offset map
-dis.plot_raw_intensity(pointer_pd, ctrl_pd, storage_path)  # raw intensity
-dis.plot_pb_factor(pointer_pd, storage_path)  # photobleaching factor
-dis.plot_corrected_intensity(pointer_pd, storage_path)  # intensity after dual correction
-dis.plot_normalized_frap(pointer_pd, storage_path)  # normalized FRAP curves
-dis.plot_frap_fitting(pointer_pd, storage_path)  # normalized FRAP curves after filtering with fitting
-                                            # individual normalized FRAP curves with fitting
+    # find optimal fitting
+    optimal_fit_pd = mat.find_optimal_fitting(pointer_pd, ['single_exp', 'soumpasis', 'ellenberg', 'double_exp'])
+    pointer_pd = pd.concat([pointer_pd, optimal_fit_pd], axis=1)
+
+    # filter frap curves
+    pointer_pd['frap_filter_single_exp'] = ble.frap_filter(pointer_pd, 'single_exp')
+    pointer_pd['frap_filter_soumpasis'] = ble.frap_filter(pointer_pd, 'soumpasis')
+    pointer_pd['frap_filter_double_exp'] = ble.frap_filter(pointer_pd, 'double_exp')
+    pointer_pd['frap_filter_ellenberg'] = ble.frap_filter(pointer_pd, 'ellenberg')
+    pointer_pd['frap_filter_optimal'] = ble.frap_filter(pointer_pd, 'optimal')
+
+    pointer_pd['pos'] = [0] * len(pointer_pd)
+    pointer_ft_pd = pointer_pd[pointer_pd['frap_filter_optimal'] == 1]
+    data_log['num_frap_curves'] = [len(pointer_ft_pd)]
+    print("%d spots passed filters for FRAP curve quality control." % data_log['num_frap_curves'][0])
+
+    # --------------------------
+    # OUTPUT
+    # --------------------------
+    print("### Export data ...")
+
+    storage_path = save_path
+    if not os.path.exists(storage_path):
+        os.makedirs(storage_path)
+
+    # measurements
+    # data_log
+    data_log.to_csv('%s/data_log.txt' % storage_path, index=False, sep='\t')
+    # full dataset of all bleach spots
+    pointer_pd.to_csv('%s/data_full.txt' % storage_path, index=False, sep='\t')
+    # dataset of control spots
+    ctrl_pd.to_csv('%s/data_ctrl.txt' % storage_path, index=False, sep='\t')
+    # dataset of nuclear
+    nuclear_pd.to_csv('%s/data_nuclear.txt' % storage_path, index=False, sep='\t')
+    # dataset of nucleoli
+    nucleoli_pd.to_csv('%s/data_nucleoli.txt' % storage_path, index=False, sep='\t')
+
+    # simplified dataset of bleach spots after FRAP curve quality control
+    pointer_out = pd.DataFrame({'pos': pointer_ft_pd['pos'],
+                                'bleach_spots': pointer_ft_pd['bleach_spots'],
+                                'x': pointer_ft_pd['x'],
+                                'y': pointer_ft_pd['y'],
+                                'nucleoli': pointer_ft_pd['nucleoli'],
+                                'nucleoli_size': pointer_ft_pd['nucleoli_size'],
+                                'nucleoli_mean_int': pointer_ft_pd['nucleoli_mean_int'],
+                                'bleach_frame': pointer_ft_pd['bleach_frame'],
+                                'pre_bleach_int': pointer_ft_pd['pre_bleach_int'],
+                                'start_int': pointer_ft_pd['frap_start_int'],
+                                'mobile_fraction': pointer_ft_pd['mobile_fraction'],
+                                't_half': pointer_ft_pd['t_half'],
+                                'ini_slope': pointer_ft_pd['ini_slope'],
+                                'linear_slope': pointer_ft_pd['linear_slope'],
+                                'optimal_r2': pointer_ft_pd['optimal_r2'],
+                                'optimal_mobile_fraction': pointer_ft_pd['optimal_mobile_fraction'],
+                                'optimal_t_half': pointer_ft_pd['optimal_t_half'],
+                                'optimal_slope': pointer_ft_pd['optimal_slope']})
+    pointer_out.to_csv('%s/data.txt' % storage_path, index=False, sep='\t')
+
+    # images
+    dis.plot_offset_map(pointer_pd, storage_path)  # offset map
+    dis.plot_raw_intensity(pointer_pd, ctrl_pd_ft, storage_path)  # raw intensity
+    dis.plot_pb_factor(pointer_pd, storage_path)  # photobleaching factor
+    dis.plot_corrected_intensity(pointer_pd, storage_path)  # intensity after dual correction
+    dis.plot_normalized_frap(pointer_pd, storage_path)  # normalized FRAP curves
+    dis.plot_frap_fitting(pointer_pd, storage_path)  # normalized FRAP curves after filtering with fitting
+    # individual normalized FRAP curves with fitting
+else:
+    # --------------------------
+    # OUTPUT
+    # --------------------------
+    print("### Export data ...")
+
+    storage_path = save_path
+    if not os.path.exists(storage_path):
+        os.makedirs(storage_path)
+    # data_log
+    data_log.to_csv('%s/data_log.txt' % storage_path, index=False, sep='\t')
 
 # --------------------------
 # OUTPUT DISPLAY
@@ -356,42 +431,43 @@ if display_mode == 'Y':
         # Layer4: analysis spots
         # display bleach spots, color sorted based on corresponding nucleoli size
         # sort colormap based on analysis spots filtered
-        cmap2 = 'winter'
-        cmap2_rgba = dis.num_color_colormap(cmap2, len(pointer_pd))[2]
-        cmap2_napari = dis.sorted_num_color_colormap(cmap2_rgba, pointer_pd, 'nucleoli_size', 'bleach_spots')[0]
         if len(pointer_pd) != 0:
+            cmap2 = 'winter'
+            cmap2_rgba = dis.num_color_colormap(cmap2, len(pointer_pd))[2]
+            cmap2_napari = dis.sorted_num_color_colormap(cmap2_rgba, pointer_pd, 'nucleoli_size', 'bleach_spots')[0]
             viewer.add_image(label(bleach_spots), name='bleach spots', colormap=('winter woBg', cmap2_napari))
 
         # matplotlib display
-        # sorted based on nucleoli size (color coded)
-        pointer_sort = pointer_pd.sort_values(by='nucleoli_size').reset_index(drop=True)  # from small to large
+        if len(ctrl_pd_ft) != 0:
+            # sorted based on nucleoli size (color coded)
+            pointer_sort = pointer_pd.sort_values(by='nucleoli_size').reset_index(drop=True)  # from small to large
 
-        # Plot-left: FRAP curves of filtered analysis spots after intensity correction (absolute intensity)
-        for i in range(len(pointer_sort)):
-            ax1.plot(pointer_sort['mean_int'][i], color=cmap2_rgba[i + 1])
-        ax1.set_title('FRAP curves')
-        ax1.set_xlabel('time')
-        ax1.set_ylabel('intensity')
-
-        # Plot-middle: FRAP curves of filtered analysis spots after intensity correction
-        # relative intensity, bleach time zero aligned
-        for i in range(len(pointer_sort)):
-            if pointer_sort['frap_filter'][i] == 1:
-                ax2.plot(pointer_sort['real_time_post'][i], pointer_sort['int_curve_post_nor'][i],
-                         color=cmap2_rgba[i + 1], alpha=0.5)
-                ax2.plot(pointer_sort['real_time_post'][i], pointer_sort['single_exp_fit'][i], '--',
-                         color=cmap2_rgba[i + 1])
-        ax2.set_title('FRAP curves')
-        ax2.set_xlabel('time (sec)')
-        ax2.set_ylabel('intensity')
-
-        # Plot-right: offset
-        if mode_bleach_detection == 'single-offset':
+            # Plot-left: FRAP curves of filtered analysis spots after intensity correction (absolute intensity)
             for i in range(len(pointer_sort)):
-                ax3.plot([0, pointer_sort['x_diff'][i]], [0, pointer_sort['y_diff'][i]],
-                         color=cmap2_rgba[i + 1])
-            ax3.set_xlim([-10, 10])
-            ax3.set_ylim([-10, 10])
-            ax3.set_title('Offset map')
-            ax3.set_xlabel('x offset')
-            ax3.set_ylabel('y offset')
+                ax1.plot(pointer_sort['mean_int'][i], color=cmap2_rgba[i + 1])
+            ax1.set_title('FRAP curves')
+            ax1.set_xlabel('time')
+            ax1.set_ylabel('intensity')
+
+            # Plot-middle: FRAP curves of filtered analysis spots after intensity correction
+            # relative intensity, bleach time zero aligned
+            for i in range(len(pointer_sort)):
+                if pointer_sort['frap_filter_optimal'][i] == 1:
+                    ax2.plot(pointer_sort['real_time_post'][i], pointer_sort['int_curve_post_nor'][i],
+                             color=cmap2_rgba[i + 1], alpha=0.5)
+                    ax2.plot(pointer_sort['real_time_post'][i], pointer_sort['optimal_fit'][i], '--',
+                             color=cmap2_rgba[i + 1])
+            ax2.set_title('FRAP curves')
+            ax2.set_xlabel('time (sec)')
+            ax2.set_ylabel('intensity')
+
+            # Plot-right: offset
+            if mode_bleach_detection == 'single-offset':
+                for i in range(len(pointer_sort)):
+                    ax3.plot([0, pointer_sort['x_diff'][i]], [0, pointer_sort['y_diff'][i]],
+                             color=cmap2_rgba[i + 1])
+                ax3.set_xlim([-10, 10])
+                ax3.set_ylim([-10, 10])
+                ax3.set_title('Offset map')
+                ax3.set_xlabel('x offset')
+                ax3.set_ylabel('y offset')

@@ -6,6 +6,7 @@ from skimage.measure import label, regionprops_table, regionprops
 import shared.dataframe as dat
 import shared.objects as obj
 import pandas as pd
+from scipy import ndimage
 
 """
 # ---------------------------------------------------------------------------------------------------
@@ -56,6 +57,9 @@ pix_stitch
               filled with same size black images)
     SYNTAX:   pix_stitch(pixels_pd: pd.DataFrame, num_col: int, num_row: int)
     
+find_background
+    FUNCTION: detect true background from given image
+    SYNTAX:   find_background(pixels: np.array)
 """
 
 DEFAULT = object()
@@ -117,6 +121,10 @@ def central_pixel_without_cells(pixels: np.array):
     binary = pixels > threshold_triangle(pixels)
     opened = opening(binary, s2)
     dilated = dilation(opened, s15)
+
+    # for FOV full of cells, filled up holes within cells (might only be needed for SG staining)
+    dilated = ndimage.binary_fill_holes(dilated)
+
     location = [pixels.shape[0] // 2, pixels.shape[1] // 2]
     center = [pixels.shape[0] // 2, pixels.shape[1] // 2]
     distance = 1
@@ -256,7 +264,12 @@ def get_bg_int(pixels_tseries: list):
             bg_int_tseries.append(bg_prop_pd['mean_intensity'][0])
         else:
             # find the mean_intensity of the largest area
-            bg_int_temp = bg_prop_pd[bg_prop_pd.area == bg_prop_pd.area.max()]['mean_intensity'][0]
+            max_area = 0
+            bg_int_temp = 0
+            for j in range(len(bg_prop_pd)):
+                if bg_prop_pd['area'][j] > max_area:
+                    max_area = bg_prop_pd['area'][j]
+                    bg_int_temp = bg_prop_pd['mean_intensity'][j]
             bg_int_tseries.append(bg_int_temp)
 
     return bg_int_tseries
@@ -437,3 +450,21 @@ def pix_stitch(pixels_pd: pd.DataFrame, num_col: int, num_row: int):
                              axis=0, out=None)
 
     return out
+
+
+def find_background(pixels: np.array):
+    """
+    Detect true background from given image
+
+    :param pixels: np.array, image for background identification
+    :return: bg: np.array, 0-and-1, background image
+    """
+
+    bg_int = get_bg_int([pixels])[0]
+    bg = pixels < 0.9 * bg_int
+    for i in range(2):
+        bg = binary_erosion(bg)
+    for i in range(2):
+        bg = binary_dilation(bg)
+
+    return bg
