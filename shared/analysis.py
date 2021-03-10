@@ -6,6 +6,7 @@ from skimage.measure import label, regionprops_table, regionprops
 import shared.dataframe as dat
 import shared.objects as obj
 import pandas as pd
+from scipy import ndimage
 
 """
 # ---------------------------------------------------------------------------------------------------
@@ -120,6 +121,10 @@ def central_pixel_without_cells(pixels: np.array):
     binary = pixels > threshold_triangle(pixels)
     opened = opening(binary, s2)
     dilated = dilation(opened, s15)
+
+    # for FOV full of cells, filled up holes within cells (might only be needed for SG staining)
+    dilated = ndimage.binary_fill_holes(dilated)
+
     location = [pixels.shape[0] // 2, pixels.shape[1] // 2]
     center = [pixels.shape[0] // 2, pixels.shape[1] // 2]
     distance = 1
