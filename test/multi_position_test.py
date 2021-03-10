@@ -3,7 +3,6 @@ import random
 import time
 from pycromanager import Bridge
 from skimage.measure import label, regionprops
-from skimage import morphology
 
 from shared.analysis import central_pixel_without_cells, bleach_location
 from shared.find_blobs import select
@@ -11,11 +10,15 @@ from shared.find_blobs import select
 # variables
 from shared.find_organelles import find_organelle
 
+# SG FRAP analyzed with Photobleach-561-confocal
+
 nr = 40
 nr_between_projector_checks = 2
 cal_exposure = 200
 cal_offset = 5
-n_curve = 250
+n_curve = 300
+analyze_channel = "PhotoBleach-561-confocal"
+acquisition_channel = "PhotoBleach-488-confocal"
 
 # build up pycromanager bridge
 bridge = Bridge()
@@ -38,6 +41,10 @@ def snap_and_get_bleach_location(exposure, cutoff):
     """
     p_exposure = projector_device.get_exposure()
     c_exposure = mmc.get_exposure()
+
+    # set analyze channel
+    mmc.set_config("Channel", analyze_channel)
+
     test_img = mm.live().snap(True).get(0)
     test_np_img = np.reshape(test_img.get_raw_pixels(), newshape=[test_img.get_height(), test_img.get_width()])
     location = central_pixel_without_cells(test_np_img)
@@ -100,17 +107,24 @@ for idx in range(pos_list.get_number_of_positions()):
         if calibrated:
             continue
     count += 1
+
+    # set analyze channel
+    mmc.set_config("Channel", analyze_channel)
+
     img = mm.live().snap(False).get(0)
     pixels = np.reshape(img.get_raw_pixels(), newshape=[img.get_height(), img.get_width()])
     # find organelles using a combination of thresholding and watershed
-    segmented = find_organelle(pixels, 'local-nucleoli', 500, 200, 10, 1000)
+    segmented = find_organelle(pixels, 'na', 500, 200, 5, 200)
     label_img = label(segmented)
-    label_img = morphology.remove_small_objects(label_img, 5)
     blobs = regionprops(label_img)
     centered = select(blobs, 'centroid', img.get_width() / 10, 0.9 * img.get_width())
 
     if len(centered) > (nr // 2):
         projector.enable_point_and_shoot_mode(True)
+
+        # set analyze channel
+        mmc.set_config("Channel", acquisition_channel)
+
         ssb = mm.acquisitions().get_acquisition_settings().copy_builder()
         mm.acquisitions().set_acquisition_settings(ssb.prefix(pos.get_label()).build())
         ds = mm.acquisitions().run_acquisition_nonblocking()
