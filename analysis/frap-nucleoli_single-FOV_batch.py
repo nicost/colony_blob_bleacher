@@ -12,8 +12,8 @@ import shared.math_functions as mat
 import os
 
 # paths
-data_source = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/" \
-              "20210302_CBB_nucleoliWTcellDensityTest/100k/B6"
+data_source = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/"\
+            "20210302_CBB_nucleoliWTcellDensityTest/40k/E6"
 
 # values for analysis
 data_c = 0
@@ -31,6 +31,8 @@ frap_start_delay = 4
 mode_bleach_detection = 'single-offset'  # only accepts 'single-raw' or 'single-offset'
 frap_start_mode = 'min'  # only accepts 'delay' or 'min'
 
+save_name = 'dataAnalysis1'
+
 """
 # ---------------------------------------------------------------------------------------------------
 # PLEASE DO NOT CHANGE AFTER THIS
@@ -46,7 +48,7 @@ for s in range(len(dirs)):
     mf_name = dirs[s].split('/')[-2]
     print("### DATA PROCESSING: %s (%d / %d)" % (folder, s+1, num_dir))
     data_path = dirs[s]
-    save_path = ("%s/dataAnalysis/%s/%s" % (data_source[:-3], mf_name, folder))
+    save_path = ("%s/%s/%s/%s" % (data_source[:-3], save_name, mf_name, folder))
     pos = dirs[s].split('/')[-1].split('_')[1]
     #pos = dirs[s].split('_')[-1]
 
