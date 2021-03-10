@@ -321,6 +321,14 @@ def get_time_length(start_frame: int, end_frame: int, time_tseries: list):
     return out
 
 
+def get_time_diff(t_start: list, end_frame: int, time_tseries: list):
+    t_end = get_time(end_frame, time_tseries)
+
+    out = 3600 * (t_end[0] - t_start[0]) + 60 * (t_end[1] - t_start[1]) + (t_end[2] - t_start[2])
+
+    return out
+
+
 def get_frame(time_lst: list, acquire_time_tseries: list):
     """
     Get action frame number based on metadata provided time
