@@ -17,8 +17,9 @@ nr_between_projector_checks = 2
 cal_exposure = 200
 cal_offset = 5
 n_curve = 300
-analyze_channel = "PhotoBleach-561-confocal"
-acquisition_channel = "PhotoBleach-488-confocal"
+cell_detect_channel = "PhotoBleach-RFP-confocal"
+analyze_channel = "PhotoBleach-RFP-confocal"
+acquisition_channel = "PhotoBleach-GFP-confocal"
 
 # build up pycromanager bridge
 bridge = Bridge()
@@ -43,7 +44,7 @@ def snap_and_get_bleach_location(exposure, cutoff):
     c_exposure = mmc.get_exposure()
 
     # set analyze channel
-    mmc.set_config("Channel", analyze_channel)
+    mmc.set_config("Channels", cell_detect_channel)
 
     test_img = mm.live().snap(True).get(0)
     test_np_img = np.reshape(test_img.get_raw_pixels(), newshape=[test_img.get_height(), test_img.get_width()])
@@ -109,7 +110,7 @@ for idx in range(pos_list.get_number_of_positions()):
     count += 1
 
     # set analyze channel
-    mmc.set_config("Channel", analyze_channel)
+    mmc.set_config("Channels", analyze_channel)
 
     img = mm.live().snap(False).get(0)
     pixels = np.reshape(img.get_raw_pixels(), newshape=[img.get_height(), img.get_width()])
@@ -123,7 +124,7 @@ for idx in range(pos_list.get_number_of_positions()):
         projector.enable_point_and_shoot_mode(True)
 
         # set analyze channel
-        mmc.set_config("Channel", acquisition_channel)
+        mmc.set_config("Channels", acquisition_channel)
 
         ssb = mm.acquisitions().get_acquisition_settings().copy_builder()
         mm.acquisitions().set_acquisition_settings(ssb.prefix(pos.get_label()).build())
