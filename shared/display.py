@@ -158,7 +158,7 @@ def napari_movie(store, cb):
 # ---------------------------------------------------------------------------------------------------
 
 
-def plot_offset_map(pointer_pd: pd.DataFrame, storage_path: str):
+def plot_offset_map(pointer_pd: pd.DataFrame, fitting_mode: str, storage_path: str):
     """
     Plot and save the offset map for detected bleach spots (for FRAP analysis)
 
@@ -172,6 +172,7 @@ def plot_offset_map(pointer_pd: pd.DataFrame, storage_path: str):
                 'frap_filter': if the FRAP curve passes the FRAP curve quality control or not
                 'x_diff': difference in x coordinates between detected bleach spots and aim spots
                 'y_diff': difference in y coordinates between detected bleach spots and aim spots
+    :param fitting_mode: str, fitting functions
     :param storage_path: str, directory to save image
 
     """
@@ -179,7 +180,7 @@ def plot_offset_map(pointer_pd: pd.DataFrame, storage_path: str):
     n = 0
     plt.subplots(figsize=(6, 4))
     for i in range(len(pointer_pd)):
-        if pointer_pd['frap_filter_single_exp'][i] == 0:
+        if pointer_pd['frap_filter_%s' % fitting_mode][i] == 0:
             if m == 0:
                 plt.plot([0, pointer_pd['x_diff'][i]], [0, pointer_pd['y_diff'][i]], color='#1E90FF', alpha=0.5,
                          label='filtered ones')
@@ -203,7 +204,7 @@ def plot_offset_map(pointer_pd: pd.DataFrame, storage_path: str):
     plt.close()
 
 
-def plot_raw_intensity(pointer_pd: pd.DataFrame, ctrl_pd: pd.DataFrame, storage_path: str):
+def plot_raw_intensity(pointer_pd: pd.DataFrame, ctrl_pd: pd.DataFrame, fitting_mode: str, storage_path: str):
     """
     Plot and save raw intensity measured from bleach spots, ctrl spots and background (for FRAP analysis)
 
@@ -221,6 +222,7 @@ def plot_raw_intensity(pointer_pd: pd.DataFrame, ctrl_pd: pd.DataFrame, storage_
                 'bg_linear_a': parameter a of linear fit (a * x + b) of background intensity
     :param ctrl_pd: pd.DataFrame, requires columns 'raw_int'
                 'raw_int': raw intensity of each control spot
+    :param fitting_mode: str, fitting functions
     :param storage_path: str, directory to save image
 
     """
@@ -239,7 +241,7 @@ def plot_raw_intensity(pointer_pd: pd.DataFrame, ctrl_pd: pd.DataFrame, storage_
             else:
                 plt.plot(ctrl_pd['raw_int'][i], color=(0.7, 0.7, 0.7), alpha=0.5)
         for i in range(len(pointer_pd)):
-            if pointer_pd['frap_filter_single_exp'][i] == 0:
+            if pointer_pd['frap_filter_%s' % fitting_mode][i] == 0:
                 if m == 0:
                     plt.plot(pointer_pd['raw_int'][i], color='#1E90FF', alpha=0.7, label='filtered ones')
                     m = m + 1
@@ -284,7 +286,7 @@ def plot_pb_factor(pointer_pd: pd.DataFrame, storage_path: str):
         plt.close()
 
 
-def plot_corrected_intensity(pointer_pd: pd.DataFrame, storage_path: str):
+def plot_corrected_intensity(pointer_pd: pd.DataFrame, fitting_mode: str, storage_path: str):
     """
     Plot and save corrected intensity measured from bleach spots after both background and photobleaching
     correction (for FRAP analysis)
@@ -295,6 +297,7 @@ def plot_corrected_intensity(pointer_pd: pd.DataFrame, storage_path: str):
     :param pointer_pd: pd.DataFrame, requires columns 'frap_filter', 'mean_int'
                 'frap_filter': if the FRAP curve passes the FRAP curve quality control or not
                 'mean_int': double corrected mean intensity of each bleach spot
+    :param fitting_mode: str, fitting functions
     :param storage_path: str, directory to save image
 
     """
@@ -302,7 +305,7 @@ def plot_corrected_intensity(pointer_pd: pd.DataFrame, storage_path: str):
     n = 0
     plt.subplots(figsize=(6, 4))
     for i in range(len(pointer_pd)):
-        if pointer_pd['frap_filter_single_exp'][i] == 0:
+        if pointer_pd['frap_filter_%s' % fitting_mode][i] == 0:
             if m == 0:
                 plt.plot(pointer_pd['mean_int'][i], color='#1E90FF', alpha=0.7, label='filtered ones')
                 m = m + 1
@@ -321,7 +324,7 @@ def plot_corrected_intensity(pointer_pd: pd.DataFrame, storage_path: str):
     plt.close()
 
 
-def plot_normalized_frap(pointer_pd: pd.DataFrame, storage_path: str):
+def plot_normalized_frap(pointer_pd: pd.DataFrame, fitting_mode: str, storage_path: str):
     """
     Plot and save normalized FRAP curves measured from bleach spots (for FRAP analysis)
 
@@ -332,6 +335,7 @@ def plot_normalized_frap(pointer_pd: pd.DataFrame, storage_path: str):
                 'frap_filter': if the FRAP curve passes the FRAP curve quality control or not
                 'real_time_post': time series after frap_start_frame (included) displayed in second
                 'int_curve_post_nor': normalized double corrected intensity after frap_start_frame (included)
+    :param fitting_mode: str, fitting functions
     :param storage_path: str, directory to save image
 
     """
@@ -339,7 +343,7 @@ def plot_normalized_frap(pointer_pd: pd.DataFrame, storage_path: str):
     n = 0
     plt.subplots(figsize=(6, 4))
     for i in range(len(pointer_pd)):
-        if pointer_pd['frap_filter_single_exp'][i] == 0:
+        if pointer_pd['frap_filter_%s' % fitting_mode][i] == 0:
             if m == 0:
                 plt.plot(pointer_pd['real_time_post'][i], pointer_pd['int_curve_post_nor'][i],
                          color='#1E90FF', alpha=0.7, label='filtered ones')
@@ -362,7 +366,7 @@ def plot_normalized_frap(pointer_pd: pd.DataFrame, storage_path: str):
     plt.close()
 
 
-def plot_frap_fitting(pointer_pd: pd.DataFrame, storage_path: str):
+def plot_frap_fitting(pointer_pd: pd.DataFrame, fitting_mode: str, storage_path: str):
     """
     Plot and save normalized FRAP curves and corresponding single exponential fitting measured from good
     bleach spots (for FRAP analysis)
@@ -378,6 +382,7 @@ def plot_frap_fitting(pointer_pd: pd.DataFrame, storage_path: str):
                 'int_curve_post_nor': normalized double corrected intensity after frap_start_frame (included)
                 'single_exp_fit': values from single exponential fit (a * (1 - np.exp(-b * x))) of
                     int_curve_post_nor
+    :param fitting_mode: str, fitting functions
     :param storage_path: str, directory to save image
 
     """
@@ -387,10 +392,10 @@ def plot_frap_fitting(pointer_pd: pd.DataFrame, storage_path: str):
         cmap2_rgba = num_color_colormap(cmap1, 6)[2]
         plt.subplots(figsize=(6, 4))
         for i in range(len(pointer_pd)):
-            if pointer_pd['frap_filter_single_exp'][i] == 1:
+            if pointer_pd['frap_filter_%s' % fitting_mode][i] == 1:
                 plt.plot(pointer_pd['real_time_post'][i], pointer_pd['int_curve_post_nor'][i],
                          color=cmap1_rgba[i + 1], alpha=0.7)
-                plt.plot(pointer_pd['real_time_post'][i], pointer_pd['single_exp_fit'][i], '--',
+                plt.plot(pointer_pd['real_time_post'][i], pointer_pd['%s_fit' % fitting_mode][i], '--',
                          color=cmap1_rgba[i + 1], alpha=0.7)
         plt.xlabel('time (s)')
         plt.ylabel('normalized intensity (AU)')
@@ -399,7 +404,7 @@ def plot_frap_fitting(pointer_pd: pd.DataFrame, storage_path: str):
 
         for i in range(len(pointer_pd)):
             plt.subplots(figsize=(6, 4))
-            if pointer_pd['frap_filter_single_exp'][i] == 1:
+            if pointer_pd['frap_filter_%s' % fitting_mode][i] == 1:
                 plt.plot(pointer_pd['real_time_post'][i], pointer_pd['int_curve_post_nor'][i],
                          color=(0.85, 0.35, 0.25), alpha=0.7)
             else:
@@ -408,7 +413,7 @@ def plot_frap_fitting(pointer_pd: pd.DataFrame, storage_path: str):
             if pointer_pd['frap_filter_single_exp'][i] == 1:
                 plt.plot(pointer_pd['real_time_post'][i], pointer_pd['single_exp_fit'][i], '--',
                          color=cmap2_rgba[1], alpha=0.7, label='single_exp')
-            """if pointer_pd['frap_filter_soumpasis'][i] == 1:
+            if pointer_pd['frap_filter_soumpasis'][i] == 1:
                 plt.plot(pointer_pd['real_time_post'][i], pointer_pd['soumpasis_fit'][i], '--',
                          color=cmap2_rgba[2], alpha=0.7, label='soumpasis')
             if pointer_pd['frap_filter_double_exp'][i] == 1:
@@ -419,7 +424,7 @@ def plot_frap_fitting(pointer_pd: pd.DataFrame, storage_path: str):
                          color=cmap2_rgba[4], alpha=0.7, label='ellenberg')
             if pointer_pd['frap_filter_optimal'][i] == 1:
                 plt.plot(pointer_pd['real_time_post'][i], pointer_pd['optimal_fit'][i], '--',
-                         color=cmap2_rgba[5], alpha=0.7, label='optimal')"""
+                         color=cmap2_rgba[5], alpha=0.7, label='optimal')
             plt.xlabel('time (s)')
             plt.ylabel('normalized intensity (AU)')
             plt.legend(loc=2, bbox_to_anchor=(0.02, 0.99))
