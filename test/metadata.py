@@ -14,6 +14,7 @@ data_path1 = '/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/
 bridge = Bridge()
 mm = bridge.get_studio()
 
-ds = mm.displays().get_active_data_viewer().get_data_provider(data_path1)
+ds = mm.displays().get_active_data_viewer().get_data_provider()
+ds = mm.data().load_data(data_path, False)
 
 print(ds)
