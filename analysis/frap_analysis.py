@@ -86,12 +86,12 @@ DISPLAYS
 # PARAMETERS allow change
 # --------------------------
 # paths
-data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/20210310_SGfrapTest/1_RFP/G2-Site_30_1"
-save_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/20210310_SGfrapTest/1_RFP/"\
-            "dataAnalysis/G2-Site_30_1"
+data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/20210310_SGfrapTest/data/10_GFP/"\
+            "G10-Site_0_1"
+save_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/20210310_SGfrapTest/dataAnalysis/"\
+            "10_GFP/G10-Site_0_1"
 
 # values for analysis
-
 analyze_organelle = 'sg'  # only accepts 'sg' or 'nucleoli'
 data_c = 0
 pos = 0
@@ -117,6 +117,7 @@ mode_bleach_detection = 'single-offset'  # only accepts 'single-raw' or 'single-
 frap_start_mode = 'min'  # only accepts 'delay' or 'min'
 fitting_mode = 'single_exp'  # accepts 'single_exp', 'double_exp', 'soumpasis', 'ellenberg', 'optimal'
 display_mode = 'Y'  # only accepts 'N' or 'Y'
+display_sort = 'na'  # accepts 'na' or other features like 'size'
 
 """
 # ---------------------------------------------------------------------------------------------------
@@ -149,7 +150,7 @@ data_log['real_time'] = [real_time]
 # --------------------------------------
 # ORGANELLE ANALYSIS based on time 0
 # --------------------------------------
-print("### Image analysis: nucleoli detection based on time 0 ...")
+print("### Image analysis: %s detection based on time 0 ..." % analyze_organelle)
 
 # reference image of time 0
 # if decide to use other image as ref_image
@@ -431,15 +432,23 @@ if display_mode == 'Y':
         if len(pointer_pd) != 0:
             cmap2 = 'winter'
             cmap2_rgba = dis.num_color_colormap(cmap2, len(pointer_pd))[2]
-            cmap2_napari = dis.sorted_num_color_colormap(cmap2_rgba, pointer_pd, '%s_size' % analyze_organelle,
-                                                         'bleach_spots')[0]
+            if display_sort == 'na':
+                cmap2_napari = dis.num_color_colormap(cmap2, len(pointer_pd))[0]
+            else:
+                cmap2_napari = dis.sorted_num_color_colormap(cmap2_rgba, pointer_pd,
+                                                             '%s_%s' % (analyze_organelle, display_sort),
+                                                             'bleach_spots')[0]
             viewer.add_image(label(bleach_spots), name='bleach spots', colormap=('winter woBg', cmap2_napari))
 
         # matplotlib display
         if len(ctrl_pd_ft) != 0:
-            # sorted based on nucleoli size (color coded)
-            pointer_sort = pointer_pd.sort_values(by='%s_size' % analyze_organelle).reset_index(drop=True)
-            # from small to large
+            if display_sort == 'na':
+                pointer_sort = pointer_pd
+            else:
+                # sorted based on feature (color coded)
+                pointer_sort = \
+                    pointer_pd.sort_values(by='%s_%s' % (analyze_organelle, display_sort)).reset_index(drop=True)
+                # from small to large
 
             # Plot-left: FRAP curves of filtered analysis spots after intensity correction (absolute intensity)
             for i in range(len(pointer_sort)):
