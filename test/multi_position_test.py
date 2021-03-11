@@ -17,6 +17,7 @@ nr_between_projector_checks = 2
 cal_exposure = 200
 cal_offset = 5
 n_curve = 300
+organelle = 'sg'  # only accepts 'sg' or 'nucleoli'
 cell_detect_channel = "PhotoBleach-RFP-confocal"
 analyze_channel = "PhotoBleach-RFP-confocal"
 acquisition_channel = "PhotoBleach-GFP-confocal"
@@ -115,7 +116,10 @@ for idx in range(pos_list.get_number_of_positions()):
     img = mm.live().snap(False).get(0)
     pixels = np.reshape(img.get_raw_pixels(), newshape=[img.get_height(), img.get_width()])
     # find organelles using a combination of thresholding and watershed
-    segmented = find_organelle(pixels, 'na', 500, 200, 5, 200)
+    if organelle == 'sg':
+        segmented = find_organelle(pixels, 'na', 500, 200, 5, 200)  # stress granule
+    else:
+        segmented = find_organelle(pixels, 'local-nucleoli', 500, 200, 10, 1000)  # nucleoli
     label_img = label(segmented)
     blobs = regionprops(label_img)
     centered = select(blobs, 'centroid', img.get_width() / 10, 0.9 * img.get_width())
