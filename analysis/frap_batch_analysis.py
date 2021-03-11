@@ -15,7 +15,7 @@ import os
 data_source = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/20210310_SGfrapTest/1_RFP"
 
 # saving options
-save_name = 'dataAnalysis1'
+save_name = 'dataAnalysis'
 
 # values for analysis
 analyze_organelle = 'sg'  # only accepts 'sg' or 'nucleoli'
@@ -92,7 +92,7 @@ for s in range(len(dirs)):
     # --------------------------------------
     # ORGANELLE ANALYSIS based on time 0
     # --------------------------------------
-    print("### Image analysis: nucleoli detection based on time 0 ...")
+    print("### Image analysis: %s detection based on time 0 ..." % analyze_organelle)
 
     # reference image of time 0
     # if decide to use other image as ref_image
