@@ -13,26 +13,41 @@ import shared.bleach_points as ble
 import shared.math_functions as mat
 
 # paths
-data_source = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/test1"
-save_source = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Exp/save"
-sampletable_source = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Exp/sampletable.txt"
-WT_source = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Exp/WT.txt"
+data_source = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/20210310_SGfrapTest"
+save_source = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Exp/20210310_SGfrapTest"
+sampletable_source = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Exp/20210311_SampletableAndWTFile/"\
+                    "sampletable.txt"
+WT_source = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Exp/"\
+            "20210100_coding_FRAPscriptDevelopment/20210304_exampleSampletableAndWTFile/WT.txt"
+
+# saving options
+save_name = 'dataAnalysis'
 
 # values for analysis
+analyze_organelle = 'sg'  # only accepts 'sg' or 'nucleoli'
 data_c = 0
 pos = 0
-thresholding = 'local-nucleoli'
-# global thresholding method; choose in between 'na','otsu','yen', 'local-nucleoli' and 'local-sg'
-min_size = 10  # minimum nucleoli size; default = 10
-max_size = 1000  # maximum nucleoli size; default = 1000;
-# larger ones are generally cells without nucleoli
 num_dilation = 3  # number of dilation from the coordinate;
 # determines analysis size of the analysis spots; default = 3
-frap_start_delay = 4
+frap_start_delay = 4  # 50ms default = 4; 100ms default = 5; 200ms default = 6
+
+# presets
+if analyze_organelle == 'sg':
+    thresholding = 'na'
+    # global thresholding method; choose in between 'na','otsu','yen', 'local-nucleoli' and 'local-sg'
+    min_size = 5  # minimum size; sg default = 5
+    max_size = 200  # maximum size; sg default = 200
+else:  # for 'nucleoli'
+    thresholding = 'local-nucleoli'
+    # global thresholding method; choose in between 'na','otsu','yen', 'local-nucleoli' and 'local-sg'
+    min_size = 10  # minimum size; nucleoli default = 10
+    max_size = 1000  # maximum size; nucleoli default = 1000;
+    # larger ones are generally cells without nucleoli
 
 # modes
 mode_bleach_detection = 'single-offset'  # only accepts 'single-raw' or 'single-offset'
 frap_start_mode = 'min'  # only accepts 'delay' or 'min'
+fitting_mode = 'single_exp'  # accepts 'single_exp', 'double_exp', 'soumpasis', 'ellenberg', 'optimal'
 analysis_mode = 'single_exp'
 
 # display settings for data analysis
@@ -41,9 +56,9 @@ repeat = 50
 
 # run_mode
 folder_organization = 'N'
-movie_analysis = 'N'
+movie_analysis = 'Y'
 file_processing = 'Y'
-data_analysis = 'Y'
+data_analysis = 'N'
 
 """
 # ---------------------------------------------------------------------------------------------------
@@ -59,14 +74,13 @@ if folder_organization == 'Y':
     dirs = [x[0] for x in os.walk(data_source)]
     dirs.pop(0)
 
-    if dirs[0].split('/')[-1].split('-')[0][1].isdigit():
-        for s in range(len(dirs)):
-            data_path = dirs[s]
-            mf_name = dirs[s].split('/')[-1].split('-')[0]
-            move_path = ("%s/data/%s/" % (data_source, mf_name))
-            if not os.path.exists(move_path):
-                os.makedirs(move_path)
-            shutil.move(dirs[s], move_path)
+    for s in range(len(dirs)):
+        data_path = dirs[s]
+        mf_name = dirs[s].split('/')[-1].split('-')[0]
+        move_path = ("%s/data/%s/" % (data_source, mf_name))
+        if not os.path.exists(move_path):
+            os.makedirs(move_path)
+        shutil.move(dirs[s], move_path)
 
 # --------------------------
 # Movie analysis
@@ -91,7 +105,7 @@ if movie_analysis == 'Y':
             print("well: %s (%d / %d)" % (mf_name, r + 1, len(dirs)))
             print("FOV: %s (%d / %d)" % (folder, s + 1, len(sub_dirs)))
             data_path = sub_dirs[s]
-            save_path = ("%s/dataAnalysis/%s/%s" % (data_source, mf_name, folder))
+            save_path = ("%s/%s/%s/%s" % (data_source, save_name, mf_name, folder))
             pos = sub_dirs[s].split('/')[-1].split('_')[1]
 
             # --------------------------
@@ -119,7 +133,7 @@ if movie_analysis == 'Y':
             # --------------------------------------
             # ORGANELLE ANALYSIS based on time 0
             # --------------------------------------
-            print("### Image analysis: nucleoli detection based on time 0 ...")
+            print("### Image analysis: %s detection based on time 0 ..." % analyze_organelle)
 
             # reference image of time 0
             # if decide to use other image as ref_image
@@ -127,30 +141,33 @@ if movie_analysis == 'Y':
             temp = store.get_image(cb.c(data_c).t(0).build())
             pix = np.reshape(temp.get_raw_pixels(), newshape=[temp.get_height(), temp.get_width()])
 
-            # nuclear detection
-            label_nuclear = find_nuclear_nucleoli(pix)
-            data_log['num_nuclei_detected'] = [np.amax(label_nuclear)]
-            print("Found %d nuclei." % data_log['num_nuclei_detected'][0])
+            if analyze_organelle == 'nucleoli':
+                # nuclear detection (currently only doable for nucleoli staining image)
+                label_nuclear = find_nuclear_nucleoli(pix)
+                data_log['num_nuclei_detected'] = [np.amax(label_nuclear)]
+                print("Found %d nuclei." % data_log['num_nuclei_detected'][0])
 
-            # nucleoli detection
-            nucleoli = find_organelle(pix, thresholding, min_size=min_size, max_size=max_size)
-            label_nucleoli = label(nucleoli, connectivity=1)
-            data_log['num_nucleoli_detected'] = [obj.object_count(nucleoli)]
-            print("Found %d nucleoli." % data_log['num_nucleoli_detected'][0])
+            # organelle detection
+            organelle = find_organelle(pix, thresholding, min_size=min_size, max_size=max_size)
+            label_organelle = label(organelle, connectivity=1)
+            data_log['num_%s_detected' % analyze_organelle] = [obj.object_count(organelle)]
+            print("Found %d %s." % (data_log['num_%s_detected' % analyze_organelle][0], analyze_organelle))
 
-            # nucleoli pd dataset
-            nucleoli_pd = organelle_analysis(pix, nucleoli, 'nucleoli', pos)
-            # link nucleoli with corresponding nuclear
-            round_x = [round(num) for num in nucleoli_pd['x']]
-            round_y = [round(num) for num in nucleoli_pd['y']]
-            nucleoli_pd['nuclear'] = obj.points_in_objects(label_nuclear, round_y, round_x)
+            # organelle pd dataset
+            organelle_pd = organelle_analysis(pix, organelle, '%s' % analyze_organelle, pos)
 
-            data_log['num_nucleoli_in_nuclei'] = [len(nucleoli_pd[nucleoli_pd['nuclear'] != 0])]
-            print("Found %d out of %d nucleoli within nuclei." % (data_log['num_nucleoli_in_nuclei'][0],
-                                                                  obj.object_count(nucleoli)))
+            if analyze_organelle == 'nucleoli':
+                # link nucleoli with corresponding nuclear
+                round_x = [round(num) for num in organelle_pd['x']]
+                round_y = [round(num) for num in organelle_pd['y']]
+                organelle_pd['nuclear'] = obj.points_in_objects(label_nuclear, round_y, round_x)
 
-            # nuclear pd dataset
-            nuclear_pd = nuclear_analysis(label_nuclear, nucleoli_pd, pos)
+                data_log['num_nucleoli_in_nuclei'] = [len(organelle_pd[organelle_pd['nuclear'] != 0])]
+                print("Found %d out of %d nucleoli within nuclei." % (data_log['num_nucleoli_in_nuclei'][0],
+                                                                      obj.object_count(organelle)))
+
+                # nuclear pd dataset
+                nuclear_pd = nuclear_analysis(label_nuclear, organelle_pd, pos)
 
             # ----------------------------------
             # BLEACH SPOTS DETECTION
@@ -171,18 +188,20 @@ if movie_analysis == 'Y':
                                                              frap_start_delay)
             log_pd = pd.concat([log_pd, coordinate_pd], axis=1)
 
-            # link pointer with corresponding nucleoli
-            log_pd['nucleoli'] = obj.points_in_objects(label_nucleoli, log_pd['x'], log_pd['y'])
+            # link pointer with corresponding organelle
+            log_pd['%s' % analyze_organelle] = obj.points_in_objects(label_organelle, log_pd['x'], log_pd['y'])
 
             # generate bleach spot mask and bleach spots dataframe (pointer_pd)
-            bleach_spots, pointer_pd = ble.get_bleach_spots(log_pd, label_nucleoli, num_dilation)
+            bleach_spots, pointer_pd = ble.get_bleach_spots(log_pd, label_organelle, analyze_organelle, num_dilation)
             data_log['num_bleach_spots'] = [obj.object_count(bleach_spots)]
             print("%d spots passed filters for analysis." % data_log['num_bleach_spots'][0])
 
-            # add bleach spots corresponding nucleoli measurements
-            pointer_pd = dat.copy_based_on_index(pointer_pd, nucleoli_pd, 'nucleoli', 'nucleoli',
-                                                 ['nucleoli_x', 'nucleoli_y', 'nucleoli_size',
-                                                  'nucleoli_mean_int', 'nucleoli_circ'],
+            # add bleach spots corresponding organelle measurements
+            pointer_pd = dat.copy_based_on_index(pointer_pd, organelle_pd, '%s' % analyze_organelle,
+                                                 '%s' % analyze_organelle,
+                                                 ['%s_x' % analyze_organelle, '%s_y' % analyze_organelle,
+                                                  '%s_size' % analyze_organelle, '%s_mean_int' % analyze_organelle,
+                                                  '%s_circ' % analyze_organelle],
                                                  ['x', 'y', 'size', 'raw_int', 'circ'])
 
             # --------------------------------------------------
@@ -191,9 +210,9 @@ if movie_analysis == 'Y':
             print("### Image analysis: FRAP curve calculation ...")
 
             # create control spots mask
-            ctrl_nucleoli = ~nucleoli_pd.index.isin(log_pd['nucleoli'].tolist())
-            ctrl_x = nucleoli_pd[ctrl_nucleoli]['x'].astype(int).tolist()
-            ctrl_y = nucleoli_pd[ctrl_nucleoli]['y'].astype(int).tolist()
+            ctrl_organelle = ~organelle_pd.index.isin(log_pd['%s' % analyze_organelle].tolist())
+            ctrl_x = organelle_pd[ctrl_organelle]['x'].astype(int).tolist()
+            ctrl_y = organelle_pd[ctrl_organelle]['y'].astype(int).tolist()
             ctrl_spots = ana.analysis_mask(ctrl_x, ctrl_y, pix, num_dilation)
             num_ctrl_spots = obj.object_count(ctrl_spots)
             pointer_pd['num_ctrl_spots'] = [num_ctrl_spots] * len(pointer_pd)
@@ -281,11 +300,35 @@ if movie_analysis == 'Y':
                                                                 pointer_pd['int_curve_post_nor'], pointer_pd['sigma'])
                 pointer_pd = pd.concat([pointer_pd, single_exp_fit_pd], axis=1)
 
+                # curve fitting with soumpasis function
+                soumpasis_fit_pd = mat.frap_fitting_soumpasis(pointer_pd['real_time_post'],
+                                                              pointer_pd['int_curve_post_nor'], pointer_pd['sigma'])
+                pointer_pd = pd.concat([pointer_pd, soumpasis_fit_pd], axis=1)
+
+                # curve fitting with double exponential function
+                double_exp_fit_pd = mat.frap_fitting_double_exp(pointer_pd['real_time_post'],
+                                                                pointer_pd['int_curve_post_nor'], pointer_pd['sigma'])
+                pointer_pd = pd.concat([pointer_pd, double_exp_fit_pd], axis=1)
+
+                # curve fitting with ellenberg function
+                ellenberg_fit_pd = mat.frap_fitting_ellenberg(pointer_pd['real_time_post'],
+                                                              pointer_pd['int_curve_post_nor'], pointer_pd['sigma'])
+                pointer_pd = pd.concat([pointer_pd, ellenberg_fit_pd], axis=1)
+
+                # find optimal fitting
+                optimal_fit_pd = mat.find_optimal_fitting(pointer_pd,
+                                                          ['single_exp', 'soumpasis', 'ellenberg', 'double_exp'])
+                pointer_pd = pd.concat([pointer_pd, optimal_fit_pd], axis=1)
+
                 # filter frap curves
                 pointer_pd['frap_filter_single_exp'] = ble.frap_filter(pointer_pd, 'single_exp')
+                pointer_pd['frap_filter_soumpasis'] = ble.frap_filter(pointer_pd, 'soumpasis')
+                pointer_pd['frap_filter_double_exp'] = ble.frap_filter(pointer_pd, 'double_exp')
+                pointer_pd['frap_filter_ellenberg'] = ble.frap_filter(pointer_pd, 'ellenberg')
+                pointer_pd['frap_filter_optimal'] = ble.frap_filter(pointer_pd, 'optimal')
 
                 pointer_pd['pos'] = [pos] * len(pointer_pd)
-                pointer_ft_pd = pointer_pd[pointer_pd['frap_filter_single_exp'] == 1]
+                pointer_ft_pd = pointer_pd[pointer_pd['frap_filter_%s' % fitting_mode] == 1]
                 data_log['num_frap_curves'] = [len(pointer_ft_pd)]
                 print("%d spots passed filters for FRAP curve quality control." % data_log['num_frap_curves'][0])
 
@@ -305,18 +348,20 @@ if movie_analysis == 'Y':
                 pointer_pd.to_csv('%s/data_full.txt' % storage_path, index=False, sep='\t')
                 # dataset of control spots
                 ctrl_pd.to_csv('%s/data_ctrl.txt' % storage_path, index=False, sep='\t')
-                # dataset of nuclear
-                nuclear_pd.to_csv('%s/data_nuclear.txt' % storage_path, index=False, sep='\t')
-                # dataset of nucleoli
-                nucleoli_pd.to_csv('%s/data_nucleoli.txt' % storage_path, index=False, sep='\t')
+                if analyze_organelle == 'nucleoli':
+                    # dataset of nuclear
+                    nuclear_pd.to_csv('%s/data_nuclear.txt' % storage_path, index=False, sep='\t')
+                # dataset of organelle
+                organelle_pd.to_csv('%s/data_%s.txt' % (storage_path, analyze_organelle), index=False, sep='\t')
 
                 # images
-                dis.plot_offset_map(pointer_pd, storage_path)  # offset map
-                dis.plot_raw_intensity(pointer_pd, ctrl_pd, storage_path)  # raw intensity
+                dis.plot_offset_map(pointer_pd, fitting_mode, storage_path)  # offset map
+                dis.plot_raw_intensity(pointer_pd, ctrl_pd_ft, fitting_mode, storage_path)  # raw intensity
                 dis.plot_pb_factor(pointer_pd, storage_path)  # photobleaching factor
-                dis.plot_corrected_intensity(pointer_pd, storage_path)  # intensity after dual correction
-                dis.plot_normalized_frap(pointer_pd, storage_path)  # normalized FRAP curves
-                dis.plot_frap_fitting(pointer_pd, storage_path)  # normalized FRAP curves after filtering with fitting
+                dis.plot_corrected_intensity(pointer_pd, fitting_mode, storage_path)  # intensity after dual correction
+                dis.plot_normalized_frap(pointer_pd, fitting_mode, storage_path)  # normalized FRAP curves
+                dis.plot_frap_fitting(pointer_pd, fitting_mode,
+                                      storage_path)  # normalized FRAP curves after filtering with fitting
                 # individual normalized FRAP curves with fitting
             else:
                 # --------------------------
@@ -335,7 +380,7 @@ if movie_analysis == 'Y':
 # --------------------------
 if file_processing == 'Y':
     print("####### FILE PROCESSING #######")
-    data_analysis_source = ("%s/dataAnalysis/" % data_source)
+    data_analysis_source = ("%s/%s/" % (data_source, save_name))
     dirs = [x for x in os.listdir(data_analysis_source)]
     sampletable = pd.read_csv(sampletable_source, na_values=['.'], sep='\t')
     dirs = dat.remove_elements(dirs, sampletable['well'].tolist())
@@ -360,8 +405,9 @@ if file_processing == 'Y':
         f_full = open("%s/%s_data_full.txt" % (save_path, name), 'w+')
         f_log = open("%s/%s_data_log.txt" % (save_path, name), 'w+')
         f_ctrl = open("%s/%s_data_ctrl.txt" % (save_path, name), 'w+')
-        f_nuclear = open("%s/%s_data_nuclear.txt" % (save_path, name), 'w+')
-        f_nucleoli = open("%s/%s_data_nucleoli.txt" % (save_path, name), 'w+')
+        if analyze_organelle == 'nucleoli':
+            f_nuclear = open("%s/%s_data_nuclear.txt" % (save_path, name), 'w+')
+        f_organelle = open("%s/%s_data_%s.txt" % (save_path, name, analyze_organelle), 'w+')
 
         for s in range(len(sub_dirs)):
             data_path = sub_dirs[s]
@@ -375,18 +421,20 @@ if file_processing == 'Y':
                 f1_ctrl = open("%s/data_ctrl.txt" % data_path, 'r')
                 dat.append_data(f_ctrl, f1_ctrl, s)
                 f1_ctrl.close()
-                f1_nuclear = open("%s/data_nuclear.txt" % data_path, 'r')
-                dat.append_data(f_nuclear, f1_nuclear, s)
-                f1_nuclear.close()
-                f1_nucleoli = open("%s/data_nucleoli.txt" % data_path, 'r')
-                dat.append_data(f_nucleoli, f1_nucleoli, s)
-                f1_nucleoli.close()
+                if analyze_organelle == 'nucleoli':
+                    f1_nuclear = open("%s/data_nuclear.txt" % data_path, 'r')
+                    dat.append_data(f_nuclear, f1_nuclear, s)
+                    f1_nuclear.close()
+                f1_organelle = open("%s/data_%s.txt" % (data_path, analyze_organelle), 'r')
+                dat.append_data(f_organelle, f1_organelle, s)
+                f1_organelle.close()
 
         f_full.close()
         f_log.close()
         f_ctrl.close()
-        f_nuclear.close()
-        f_nucleoli.close()
+        if analyze_organelle == 'nucleoli':
+            f_nuclear.close()
+        f_organelle.close()
 
 # --------------------------
 # Data analysis
