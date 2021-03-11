@@ -187,8 +187,8 @@ def filter_bleach_spots(log_pd: pd.DataFrame, analyze_organelle: str):
     Filter bleach spots
 
     Filter out bleach spots:
-    1) aim outside of nucleoli
-    2) bleach the same nucleoli
+    1) aim outside of nucleoli (bleach_spots_check_organelle = 'Y')
+    2) bleach the same nucleoli (bleach_spots_check_organelle = 'Y')
     3) too close to merge as a single bleach spots
     4) (0,0)
     5) too far away from the aim point (>20 any direction)
@@ -214,16 +214,17 @@ def filter_bleach_spots(log_pd: pd.DataFrame, analyze_organelle: str):
                         & (~log_pd['bleach_spots'].isin(pointer_same_analysis_spots))
                         & (log_pd['x'] != 0) & (log_pd['y'] != 0) & (np.abs(log_pd['x_diff']) <= 10)
                         & (np.abs(log_pd['y_diff'] <= 10))]
+
     del pointer_pd['bleach_spots']  # delete previous bleach_spots information
     pointer_pd = pointer_pd.reset_index(drop=True)  # reset index
 
     # print number of pointers failed to pass each filter
     # filters applied later will not count the ones that fail from the previous filters
     num_filter1 = len(log_pd[(log_pd['%s' % analyze_organelle] == 0)])
-    print("%d bleach spots aim outside of nucleoli." % num_filter1)
+    print("%d bleach spots aim outside of %s." % (num_filter1, analyze_organelle))
     num_filter2 = len(log_pd[(log_pd['%s' % analyze_organelle] > 0)
                              & (log_pd['%s' % analyze_organelle].isin(pointer_target_same_organelle))])
-    print("%d bleach spots aim to the same nucleoli." % num_filter2)
+    print("%d bleach spots aim to the same %s." % (num_filter2, analyze_organelle))
     num_filter3 = len(log_pd[(log_pd['%s' % analyze_organelle] > 0)
                              & (~log_pd['%s' % analyze_organelle].isin(pointer_target_same_organelle))
                              & (log_pd['bleach_spots'].isin(pointer_same_analysis_spots))])
