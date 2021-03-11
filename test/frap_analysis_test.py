@@ -301,7 +301,7 @@ if len(ctrl_pd_ft) != 0:
 
     # images
     dis.plot_offset_map(pointer_pd, fitting_mode, storage_path)  # offset map
-    dis.plot_raw_intensity(pointer_pd, ctrl_pd, fitting_mode, storage_path)  # raw intensity
+    dis.plot_raw_intensity(pointer_pd, ctrl_pd_ft, fitting_mode, storage_path)  # raw intensity
     dis.plot_pb_factor(pointer_pd, storage_path)  # photobleaching factor
     dis.plot_corrected_intensity(pointer_pd, fitting_mode, storage_path)  # intensity after dual correction
     dis.plot_normalized_frap(pointer_pd, fitting_mode, storage_path)  # normalized FRAP curves
