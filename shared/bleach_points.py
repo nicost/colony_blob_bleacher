@@ -141,7 +141,7 @@ def get_bleach_spots_coordinates(log_pd: pd.DataFrame, store, cb, data_c: int, m
     return coordinate_pd
 
 
-def get_bleach_spots(log_pd: pd.DataFrame, label_nucleoli: np.array, num_dilation=3):
+def get_bleach_spots(log_pd: pd.DataFrame, label_nucleoli: np.array, analyze_organelle: str, num_dilation=3):
     """
     Generate bleach spots mask and corresponding pd.DataFrame table
 
@@ -151,6 +151,7 @@ def get_bleach_spots(log_pd: pd.DataFrame, label_nucleoli: np.array, num_dilatio
                 'nucleoli': pointer corresponding nucleoli label index
                 originally imports from .log file
     :param label_nucleoli: np.array, grey scale labeled nucleoli image
+    :param analyze_organelle: str, 'sg' or 'nucleoli'
     :param num_dilation: int, optional (default: 3)
                 number of dilation applied from the coordinates
                 determines the size of the generated mask for each point
@@ -168,7 +169,7 @@ def get_bleach_spots(log_pd: pd.DataFrame, label_nucleoli: np.array, num_dilatio
     log_pd['bleach_spots'] = obj.points_in_objects(label_bleach_spots, log_pd['x'], log_pd['y'])
 
     # filter bleach spots
-    pointer_pd = filter_bleach_spots(log_pd)
+    pointer_pd = filter_bleach_spots(log_pd, analyze_organelle)
 
     # generate bleach spots mask (after filtering)
     bleach_spots_ft = ana.analysis_mask(pointer_pd['y'], pointer_pd['x'], label_nucleoli, num_dilation)
@@ -181,7 +182,7 @@ def get_bleach_spots(log_pd: pd.DataFrame, label_nucleoli: np.array, num_dilatio
     return bleach_spots_ft, pointer_pd
 
 
-def filter_bleach_spots(log_pd: pd.DataFrame):
+def filter_bleach_spots(log_pd: pd.DataFrame, analyze_organelle: str):
     """
     Filter bleach spots
 
@@ -195,20 +196,21 @@ def filter_bleach_spots(log_pd: pd.DataFrame):
     :param log_pd: pd.DataFrame, requires columns 'nucleoli', 'bleach_spots'
                 'nucleoli': corresponding nucleoli label index
                 'bleach_spots': corresponding bleach spots label index
+    :param analyze_organelle: str, 'sg' or 'nucleoli'
     :return: pointer_pd: pd.DataFrame
                 pointer dataframe of all filtered bleach spots
 
     """
     # mask2
-    pointer_target_same_nucleoli = \
-        [item for item, count in collections.Counter(log_pd['nucleoli'].tolist()).items() if count > 1]
+    pointer_target_same_organelle = \
+        [item for item, count in collections.Counter(log_pd['%s' % analyze_organelle].tolist()).items() if count > 1]
     # mask3
     pointer_same_analysis_spots = \
         [item for item, count in collections.Counter(log_pd['bleach_spots'].tolist()).items() if count > 1]
 
     # filter all the pointers from log to generate real pointer_pd
-    pointer_pd = log_pd[(log_pd['nucleoli'] > 0)
-                        & (~log_pd['nucleoli'].isin(pointer_target_same_nucleoli))
+    pointer_pd = log_pd[(log_pd['%s' % analyze_organelle] > 0)
+                        & (~log_pd['%s' % analyze_organelle].isin(pointer_target_same_organelle))
                         & (~log_pd['bleach_spots'].isin(pointer_same_analysis_spots))
                         & (log_pd['x'] != 0) & (log_pd['y'] != 0) & (np.abs(log_pd['x_diff']) <= 10)
                         & (np.abs(log_pd['y_diff'] <= 10))]
@@ -217,18 +219,22 @@ def filter_bleach_spots(log_pd: pd.DataFrame):
 
     # print number of pointers failed to pass each filter
     # filters applied later will not count the ones that fail from the previous filters
-    num_filter1 = len(log_pd[(log_pd['nucleoli'] == 0)])
+    num_filter1 = len(log_pd[(log_pd['%s' % analyze_organelle] == 0)])
     print("%d bleach spots aim outside of nucleoli." % num_filter1)
-    num_filter2 = len(log_pd[(log_pd['nucleoli'] > 0) & (log_pd['nucleoli'].isin(pointer_target_same_nucleoli))])
+    num_filter2 = len(log_pd[(log_pd['%s' % analyze_organelle] > 0)
+                             & (log_pd['%s' % analyze_organelle].isin(pointer_target_same_organelle))])
     print("%d bleach spots aim to the same nucleoli." % num_filter2)
-    num_filter3 = len(log_pd[(log_pd['nucleoli'] > 0) & (~log_pd['nucleoli'].isin(pointer_target_same_nucleoli))
+    num_filter3 = len(log_pd[(log_pd['%s' % analyze_organelle] > 0)
+                             & (~log_pd['%s' % analyze_organelle].isin(pointer_target_same_organelle))
                              & (log_pd['bleach_spots'].isin(pointer_same_analysis_spots))])
     print("%d bleach spots aim too close." % num_filter3)
-    num_filter4 = len(log_pd[(log_pd['nucleoli'] > 0) & (~log_pd['nucleoli'].isin(pointer_target_same_nucleoli))
+    num_filter4 = len(log_pd[(log_pd['%s' % analyze_organelle] > 0)
+                             & (~log_pd['%s' % analyze_organelle].isin(pointer_target_same_organelle))
                              & (~log_pd['bleach_spots'].isin(pointer_same_analysis_spots))
                              & ((log_pd['x'] == 0) | (log_pd['y'] == 0))])
     print("%d bleach spots did not find." % num_filter4)
-    num_filter5 = len(log_pd[(log_pd['nucleoli'] > 0) & (~log_pd['nucleoli'].isin(pointer_target_same_nucleoli))
+    num_filter5 = len(log_pd[(log_pd['%s' % analyze_organelle] > 0)
+                             & (~log_pd['%s' % analyze_organelle].isin(pointer_target_same_organelle))
                              & (~log_pd['bleach_spots'].isin(pointer_same_analysis_spots))
                              & (log_pd['x'] != 0) & (log_pd['y'] != 0)
                              & ((np.abs(log_pd['x_diff']) > 10) | (np.abs(log_pd['y_diff']) > 10))])
