@@ -86,7 +86,6 @@ DISPLAYS
 # PARAMETERS allow change
 # --------------------------
 # paths
-# data_path = "C:\\Users\\NicoLocal\\Images\\Jess\\20201116-Nucleoli-bleaching-4x\\PythonAcq1\\AutoBleach_15"
 data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/20210310_SGfrapTest/1_RFP/G2-Site_30_1"
 save_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/20210310_SGfrapTest/1_RFP/"\
             "dataAnalysis/G2-Site_30_1"
@@ -204,7 +203,7 @@ log_pd['bleach_frame'] = dat.get_frame(log_pd['time'], acquire_time_tseries)
 coordinate_pd = ble.get_bleach_spots_coordinates(log_pd, store, cb, data_c, mode_bleach_detection, frap_start_delay)
 log_pd = pd.concat([log_pd, coordinate_pd], axis=1)
 
-# link pointer with corresponding nucleoli
+# link pointer with corresponding organelle
 log_pd['%s' % analyze_organelle] = obj.points_in_objects(label_organelle, log_pd['x'], log_pd['y'])
 
 # generate bleach spot mask and bleach spots dataframe (pointer_pd)
@@ -235,7 +234,8 @@ pointer_pd['num_ctrl_spots'] = [num_ctrl_spots] * len(pointer_pd)
 # get raw intensities for bleach spots and control spots
 pointer_pd['raw_int'] = ana.get_intensity(bleach_spots, pixels_tseries)
 ctrl_spots_int_tseries = ana.get_intensity(ctrl_spots, pixels_tseries)
-ctrl_pd = pd.DataFrame({'ctrl_spots': np.arange(0, num_ctrl_spots, 1), 'raw_int': ctrl_spots_int_tseries})
+ctrl_pd = pd.DataFrame({'pos': [pos] * num_ctrl_spots, 'ctrl_spots': np.arange(0, num_ctrl_spots, 1),
+                        'raw_int': ctrl_spots_int_tseries})
 
 print("### Image analysis: background correction ...")
 # background intensity measurement
@@ -261,7 +261,7 @@ ctrl_pd['bg_cor_int'] = ana.bg_correction(ctrl_pd['raw_int'], bg)
 filter_ctrl = []
 for i in range(len(ctrl_pd)):
     ctrl_int = ctrl_pd['bg_cor_int'][i]
-    if (max(ctrl_int)-min(ctrl_int))/max(ctrl_int) > 0.4:
+    if (max(ctrl_int) - min(ctrl_int)) / max(ctrl_int) > 0.4:
         filter_ctrl.append(0)
     else:
         filter_ctrl.append(1)
@@ -296,7 +296,8 @@ if len(ctrl_pd_ft) != 0:
     pointer_pd['mean_int'] = ana.pb_correction(pointer_pd['bg_cor_int'], pb)
 
     # normalize frap curve and measure mobile fraction and t-half based on curve itself
-    frap_pd = ble.frap_analysis(pointer_pd, max_t, acquire_time_tseries, real_time, frap_start_delay, frap_start_mode)
+    frap_pd = ble.frap_analysis(pointer_pd, max_t, acquire_time_tseries, real_time, frap_start_delay,
+                                frap_start_mode)
     pointer_pd = pd.concat([pointer_pd, frap_pd], axis=1)
 
     # --------------------------------------------------
@@ -339,7 +340,7 @@ if len(ctrl_pd_ft) != 0:
     pointer_pd['frap_filter_ellenberg'] = ble.frap_filter(pointer_pd, 'ellenberg')
     pointer_pd['frap_filter_optimal'] = ble.frap_filter(pointer_pd, 'optimal')
 
-    pointer_pd['pos'] = [0] * len(pointer_pd)
+    pointer_pd['pos'] = [pos] * len(pointer_pd)
     pointer_ft_pd = pointer_pd[pointer_pd['frap_filter_%s' % fitting_mode] == 1]
     data_log['num_frap_curves'] = [len(pointer_ft_pd)]
     print("%d spots passed filters for FRAP curve quality control." % data_log['num_frap_curves'][0])
