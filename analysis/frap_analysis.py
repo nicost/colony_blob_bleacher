@@ -86,13 +86,13 @@ DISPLAYS
 # PARAMETERS allow change
 # --------------------------
 # paths
-data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/20210310_SGfrapTest/data/10_GFP/"\
-            "G10-Site_0_1"
-save_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/20210310_SGfrapTest/dataAnalysis/"\
-            "10_GFP/G10-Site_0_1"
+data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/20210310_SGfrapTest/data/6_GFP/"\
+            "G6-Site_29_1"
+save_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/20210310_SGfrapTest/dataAnalysis1/"\
+            "6_GFP/G6-Site_29_1"
 
 # values for analysis
-analyze_organelle = 'sg'  # only accepts 'sg' or 'nucleoli'
+analyze_organelle = 'nucleoli'  # only accepts 'sg' or 'nucleoli'
 data_c = 0
 pos = 0
 num_dilation = 3  # number of dilation from the coordinate;
@@ -117,7 +117,7 @@ mode_bleach_detection = 'single-offset'  # only accepts 'single-raw' or 'single-
 frap_start_mode = 'min'  # only accepts 'delay' or 'min'
 fitting_mode = 'single_exp'  # accepts 'single_exp', 'double_exp', 'soumpasis', 'ellenberg', 'optimal'
 display_mode = 'Y'  # only accepts 'N' or 'Y'
-display_sort = 'na'  # accepts 'na' or other features like 'size'
+display_sort = 'pre_bleach_int'  # accepts 'na' or other features like 'sg_size'
 
 """
 # ---------------------------------------------------------------------------------------------------
@@ -407,7 +407,7 @@ if display_mode == 'Y':
         mov = dis.napari_movie(store, cb)
         viewer.add_image(mov, name='data')
 
-        if analyze_organelle == 'nucleoli':
+        if (analyze_organelle == 'nucleoli') & (np.amax(label_nuclear) > 0):
             # Layer2: nuclear
             # display labeled nuclei
             cmap1 = 'winter'
@@ -436,7 +436,7 @@ if display_mode == 'Y':
                 cmap2_napari = dis.num_color_colormap(cmap2, len(pointer_pd))[0]
             else:
                 cmap2_napari = dis.sorted_num_color_colormap(cmap2_rgba, pointer_pd,
-                                                             '%s_%s' % (analyze_organelle, display_sort),
+                                                             '%s' % display_sort,
                                                              'bleach_spots')[0]
             viewer.add_image(label(bleach_spots), name='bleach spots', colormap=('winter woBg', cmap2_napari))
 
@@ -447,7 +447,7 @@ if display_mode == 'Y':
             else:
                 # sorted based on feature (color coded)
                 pointer_sort = \
-                    pointer_pd.sort_values(by='%s_%s' % (analyze_organelle, display_sort)).reset_index(drop=True)
+                    pointer_pd.sort_values(by='%s' % display_sort).reset_index(drop=True)
                 # from small to large
 
             # Plot-left: FRAP curves of filtered analysis spots after intensity correction (absolute intensity)
