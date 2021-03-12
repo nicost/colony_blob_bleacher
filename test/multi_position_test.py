@@ -19,7 +19,7 @@ cal_offset = 5
 n_curve = 300
 organelle = 'sg'  # only accepts 'sg' or 'nucleoli'
 cell_detect_channel = "PhotoBleach-RFP-confocal"
-analyze_channel = "PhotoBleach-RFP-confocal"
+analyze_channel = "PhotoBleach-RFP-confocal"  # also used as reference channel
 acquisition_channel = "PhotoBleach-GFP-confocal"
 
 # build up pycromanager bridge
@@ -127,9 +127,18 @@ for idx in range(pos_list.get_number_of_positions()):
     if len(centered) > (nr // 2):
         projector.enable_point_and_shoot_mode(True)
 
-        # set analyze channel
-        mmc.set_config("Channels", acquisition_channel)
+        # acquisition of the single mScarlet image
+        # https://valelab4.ucsf.edu/~MM/doc-2.0.0-gamma/mmstudio/org/micromanager/acquisition/SequenceSettings.Builder.
+        # html#timeFirst-boolean-
+        mmc.set_config("Channels", analyze_channel)
+        ssb1 = mm.acquisitions().get_acquisition_settings().copy_builder()
+        ssb1.num_frames(1)
+        ssb1.prefix('%s-ref' % pos.get_label())
+        mm.acquisitions().set_acquisition_settings(ssb1.build())
+        mm.acquisitions().run_acquisition()
 
+        # acquire FRAP movies
+        mmc.set_config("Channels", acquisition_channel)
         ssb = mm.acquisitions().get_acquisition_settings().copy_builder()
         mm.acquisitions().set_acquisition_settings(ssb.prefix(pos.get_label()).build())
         ds = mm.acquisitions().run_acquisition_nonblocking()
