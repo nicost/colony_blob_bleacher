@@ -22,6 +22,7 @@ cell_detect_channel = "PhotoBleach-RFP-confocal"
 analyze_channel = "PhotoBleach-RFP-confocal"  # also used as reference channel
 n_acquire_channel = 2
 acquisition_channel_lst = ["PhotoBleach-GFP-confocal", "PhotoBleach-RFP-confocal"]
+prefix_channel_lst = ['GFP', 'RFP']
 
 # build up pycromanager bridge
 bridge = Bridge()
@@ -87,6 +88,7 @@ channel_count = 0
 ds = mm.data().create_ram_datastore()
 count = 0
 acquisition_channel = acquisition_channel_lst[0]
+prefix_channel = prefix_channel_lst[0]
 
 for idx in range(pos_list.get_number_of_positions()):
     # Close DataViewer opened during previous run
@@ -103,10 +105,13 @@ for idx in range(pos_list.get_number_of_positions()):
                 well_count = 0
                 channel_count += 1
                 acquisition_channel = acquisition_channel_lst[channel_count]
+                prefix_channel = prefix_channel_lst[channel_count]
     else:
         well_count = 0
         well = well_temp
+        channel_count = 0
         acquisition_channel = acquisition_channel_lst[0]
+        prefix_channel = prefix_channel_lst[0]
 
     time.sleep(0.1)
     if count >= nr_between_projector_checks:
@@ -144,12 +149,15 @@ for idx in range(pos_list.get_number_of_positions()):
         ssb1.num_frames(1)
         ssb1.prefix('%s-ref' % pos.get_label())
         mm.acquisitions().set_acquisition_settings(ssb1.build())
-        mm.acquisitions().run_acquisition()
+        ds1 = mm.acquisitions().run_acquisition()
+        dv1 = mm.displays().close_displays_for(ds1)
 
         # acquire FRAP movies
         mmc.set_config("Channels", acquisition_channel)
         ssb = mm.acquisitions().get_acquisition_settings().copy_builder()
-        mm.acquisitions().set_acquisition_settings(ssb.prefix(pos.get_label()).build())
+        ssb.num_frames(300)
+        ssb.prefix('%s-%s' % (pos.get_label(), prefix_channel))
+        mm.acquisitions().set_acquisition_settings(ssb.build())
         ds = mm.acquisitions().run_acquisition_nonblocking()
         # Trick to get timing right.  Wait for Core to report that Sequence is running
         while not mmc.is_sequence_running(mmc.get_camera_device()):
