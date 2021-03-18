@@ -3,6 +3,7 @@ import pandas as pd
 from pycromanager import Bridge
 from shared.find_organelles import find_organelle, organelle_analysis, find_nuclear_nucleoli, nuclear_analysis
 from skimage.measure import label
+from skimage.morphology import medial_axis
 import shared.analysis as ana
 import shared.dataframe as dat
 import shared.display as dis
@@ -11,19 +12,18 @@ import shared.bleach_points as ble
 import shared.math_functions as mat
 import os
 
-# paths
-data_source = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/20210310_SGfrapTest/1_RFP"
-
-# saving options
-save_name = 'dataAnalysis'
+# Please changes
+data_source = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/"\
+                "20210203_CBB_nucleoliArsAndHeatshockTreatment/data/HS_30min"
+save_name = 'dataAnalysis_dis'
+analyze_organelle = 'nucleoli'  # only accepts 'sg' or 'nucleoli'
+frap_start_delay = 6  # 50ms default = 4; 100ms default = 5; 200ms default = 6
 
 # values for analysis
-analyze_organelle = 'sg'  # only accepts 'sg' or 'nucleoli'
 data_c = 0
 pos = 0
 num_dilation = 3  # number of dilation from the coordinate;
 # determines analysis size of the analysis spots; default = 3
-frap_start_delay = 4  # 50ms default = 4; 100ms default = 5; 200ms default = 6
 
 # presets
 if analyze_organelle == 'sg':
@@ -148,6 +148,13 @@ for s in range(len(dirs)):
 
     # link pointer with corresponding organelle
     log_pd['%s' % analyze_organelle] = obj.points_in_objects(label_organelle, log_pd['x'], log_pd['y'])
+
+    # calculate distance to organelle boundary
+    _, distance_map = medial_axis(organelle, return_distance=True)
+    distance_lst = []
+    for i in range(len(log_pd)):
+        distance_lst.append(distance_map[log_pd['y'][i]][log_pd['x'][i]])
+    log_pd['distance'] = distance_lst
 
     # generate bleach spot mask and bleach spots dataframe (pointer_pd)
     bleach_spots, pointer_pd = ble.get_bleach_spots(log_pd, label_organelle, analyze_organelle, num_dilation)
