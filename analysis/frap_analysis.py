@@ -12,6 +12,7 @@ from matplotlib.figure import Figure
 from vispy.color import Colormap
 from shared.find_organelles import find_organelle, organelle_analysis, find_nuclear_nucleoli, nuclear_analysis
 from skimage.measure import label
+from skimage.morphology import medial_axis
 import shared.analysis as ana
 import shared.dataframe as dat
 import shared.display as dis
@@ -85,19 +86,21 @@ DISPLAYS
 # --------------------------
 # PARAMETERS allow change
 # --------------------------
-# paths
-data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/20210310_SGfrapTest/data/6_GFP/"\
-            "G6-Site_29_1"
-save_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/20210310_SGfrapTest/dataAnalysis1/"\
-            "6_GFP/G6-Site_29_1"
+# Please changes
+data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/"\
+                "20210203_CBB_nucleoliArsAndHeatshockTreatment/data/Ars_2hr_1/D2-Site_1_1"
+save_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/"\
+                "20210203_CBB_nucleoliArsAndHeatshockTreatment/dataAnalysis1/Ars_2hr_1/D2-Site_1_1"
+analyze_organelle = 'nucleoli'  # only accepts 'sg' or 'nucleoli'
+frap_start_delay = 6  # 50ms default = 4; 100ms default = 5; 200ms default = 6
+display_mode = 'Y'  # only accepts 'N' or 'Y'
+display_sort = 'pre_bleach_int'  # accepts 'na' or other features like 'sg_size'
 
 # values for analysis
-analyze_organelle = 'nucleoli'  # only accepts 'sg' or 'nucleoli'
 data_c = 0
 pos = 0
 num_dilation = 3  # number of dilation from the coordinate;
 # determines analysis size of the analysis spots; default = 3
-frap_start_delay = 4  # 50ms default = 4; 100ms default = 5; 200ms default = 6
 
 # presets
 if analyze_organelle == 'sg':
@@ -116,8 +119,6 @@ else:  # for 'nucleoli'
 mode_bleach_detection = 'single-offset'  # only accepts 'single-raw' or 'single-offset'
 frap_start_mode = 'min'  # only accepts 'delay' or 'min'
 fitting_mode = 'single_exp'  # accepts 'single_exp', 'double_exp', 'soumpasis', 'ellenberg', 'optimal'
-display_mode = 'Y'  # only accepts 'N' or 'Y'
-display_sort = 'pre_bleach_int'  # accepts 'na' or other features like 'sg_size'
 
 """
 # ---------------------------------------------------------------------------------------------------
@@ -206,6 +207,13 @@ log_pd = pd.concat([log_pd, coordinate_pd], axis=1)
 
 # link pointer with corresponding organelle
 log_pd['%s' % analyze_organelle] = obj.points_in_objects(label_organelle, log_pd['x'], log_pd['y'])
+
+# calculate distance to organelle boundary
+_, distance_map = medial_axis(organelle, return_distance=True)
+distance_lst = []
+for i in range(len(log_pd)):
+    distance_lst.append(distance_map[log_pd['y'][i]][log_pd['x'][i]])
+log_pd['distance'] = distance_lst
 
 # generate bleach spot mask and bleach spots dataframe (pointer_pd)
 bleach_spots, pointer_pd = ble.get_bleach_spots(log_pd, label_organelle, analyze_organelle, num_dilation)
