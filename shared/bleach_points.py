@@ -71,9 +71,9 @@ def get_bleach_spots_coordinates(log_pd: pd.DataFrame, store, cb, data_c: int, m
     """
     if mode == 'single-raw':
         coordinate_pd = pd.DataFrame({'x': log_pd['aim_x'],
-                                  'y': log_pd['aim_y'],
-                                  'x_diff': [0] * len(log_pd),
-                                  'y_diff': [0] * len(log_pd)})
+                                      'y': log_pd['aim_y'],
+                                      'x_diff': [0] * len(log_pd),
+                                      'y_diff': [0] * len(log_pd)})
 
     elif mode == 'single-offset':
         x_lst = []
