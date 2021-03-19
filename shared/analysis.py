@@ -188,14 +188,14 @@ def analysis_mask(x: list, y: list, pixels_same_size: np.array, num_dilation=3):
     return out
 
 
-def get_intensity(object: np.array, pixels_tseries: list):
+def get_intensity(label_obj: np.array, pixels_tseries: list):
     """
     Measure mean intensity time series for all given objects
 
     Usage examples:
     1) measure bleach spots/ctrl spots intensity series
 
-    :param obj: np.array, 0-and-1 object mask
+    :param label_obj: np.array, 0-and-1 object mask
     :param pixels_tseries: list, pixels time series
                 e.g. [pixels_t0, pixels_t1, pixels_t2, ...]
     :return: obj_int_tseries: list
@@ -203,11 +203,11 @@ def get_intensity(object: np.array, pixels_tseries: list):
     """
 
     max_t = len(pixels_tseries)
-    obj_int_tseries = [[] for _ in range(obj.object_count(object))]
+    obj_int_tseries = [[] for _ in range(len(np.unique(label_obj))-1)]
 
     for t in range(0, max_t):
         # measure mean intensity for objects
-        obj_props = regionprops(label(object, connectivity=1), pixels_tseries[t])
+        obj_props = regionprops(label_obj, pixels_tseries[t])
         for i in range(len(obj_props)):
             obj_int_tseries[i].append(obj_props[i].mean_intensity)
 
@@ -275,7 +275,7 @@ def get_bg_int(pixels_tseries: list):
     return bg_int_tseries
 
 
-def bg_correction(int_tseries_multiple_points: list, bg_int_tseries: list):
+def bg_correction(int_tseries_multiple_points: list, bg_int_tseries_multiple_points: list):
     """
     Background correction of time series intensities for multiple points
 
@@ -289,9 +289,10 @@ def bg_correction(int_tseries_multiple_points: list, bg_int_tseries: list):
                 list of time series intensities of multiple points
                 e.g. [[point1_t0, point1_t1 ...], [point2_t0, point2_t1, ...], ...]
                 int_tseries_multiple_points[i]: list, intensity series of point i
-    :param bg_int_tseries: list
-                list of background intensities, e.g. [bg_1, bg_2, ...]
-                t_bg_int[i]: float, bg_int at frame i
+    :param bg_int_tseries_multiple_points: list
+                list of background intensities of multiple points
+                e.g. [[bg_1_t0, bg_1_t1 ...], [bg_2_t0, bg_2_t1 ...], ...]
+                t_bg_int[i]: list, background intensity series for point i
     :return: out: list
                 background corrected time series intensities of multiple points
                 corrected intensities <0 were set to 0
@@ -302,7 +303,7 @@ def bg_correction(int_tseries_multiple_points: list, bg_int_tseries: list):
     num_points = len(int_tseries_multiple_points)
     for i in range(num_points):
         # calculate corrected intensities
-        int_tseries_cor = dat.list_subtraction(int_tseries_multiple_points[i], bg_int_tseries)
+        int_tseries_cor = dat.list_subtraction(int_tseries_multiple_points[i], bg_int_tseries_multiple_points[i])
         # set any negative value to 0
         int_tseries_cor = [0 if i < 0 else i for i in int_tseries_cor]
         # store corrected intensity
