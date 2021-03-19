@@ -471,7 +471,7 @@ def filter_ctrl(df: pd.DataFrame):
     flt_ctrl = []
     for i in range(len(df)):
         ctrl_int = df['bg_cor_int'][i]
-        if (max(ctrl_int) - min(ctrl_int)) / max(ctrl_int) > 0.4:
+        if (max(ctrl_int) - min(ctrl_int)) / (max(ctrl_int) + 0.0001) > 0.4:
             flt_ctrl.append(0)
         else:
             flt_ctrl.append(1)
