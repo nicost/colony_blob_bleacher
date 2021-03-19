@@ -413,10 +413,10 @@ def plot_frap_fitting(pointer_pd: pd.DataFrame, fitting_mode: str, prefix: str, 
             plt.subplots(figsize=(6, 4))
             if pointer_pd['frap_filter_%s' % fitting_mode][i] == 1:
                 plt.plot(pointer_pd['real_time_post'][i], pointer_pd['int_curve_post_nor'][i],
-                         color=(0.85, 0.35, 0.25), alpha=0.7)
+                         color=(0.85, 0.35, 0.25), alpha=0.7, label='data')
             else:
                 plt.plot(pointer_pd['real_time_post'][i], pointer_pd['int_curve_post_nor'][i],
-                         color='#1E90FF', alpha=0.7)
+                         color='#1E90FF', alpha=0.7, label='data')
             if pointer_pd['frap_filter_single_exp'][i] == 1:
                 plt.plot(pointer_pd['real_time_post'][i], pointer_pd['single_exp_fit'][i], '--',
                          color=cmap2_rgba[1], alpha=0.7, label='single_exp')
