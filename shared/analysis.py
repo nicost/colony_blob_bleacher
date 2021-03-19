@@ -337,7 +337,7 @@ def get_pb_factor(int_tseries_ctrl_spots: list):
         pb_ratio = []
         # calculate pb_ratio ctrl_t(t)/ctrl_t(0) for each single ctrl spots
         for i in range(len(int_tseries_ctrl_spots)):
-            pb_ratio.append(np.mean(int_tseries_ctrl_spots[i][t]) / np.mean(int_tseries_ctrl_spots[i][0]))
+            pb_ratio.append(int_tseries_ctrl_spots[i][t] / (int_tseries_ctrl_spots[i][0] + 0.0001))
         # calculate pb_factor
         pb_factor = np.mean(pb_ratio)
         pb_factor_tseries.append(pb_factor)
