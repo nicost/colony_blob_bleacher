@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 from pycromanager import Bridge
 from shared.find_organelles import find_organelle, organelle_analysis, find_nuclear_nucleoli, nuclear_analysis
-from skimage.measure import label
+from skimage.measure import label, regionprops_table
 from skimage.morphology import medial_axis
 import shared.analysis as ana
 import shared.dataframe as dat
