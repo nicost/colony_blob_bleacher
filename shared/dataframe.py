@@ -145,9 +145,13 @@ def copy_based_on_index(dataframe1: pd.DataFrame, dataframe2: pd.DataFrame,
     value_lst = [[] for _ in range(len(column_lst1))]
 
     for i in dataframe1[index_name1]:
-        target = dataframe2[dataframe2[index_name2] == i].iloc[0]
-        for j in range(len(column_lst1)):
-            value_lst[j].append(target[column_lst2[j]])
+        if len(dataframe2[dataframe2[index_name2] == i]) == 1:
+            target = dataframe2[dataframe2[index_name2] == i].iloc[0]
+            for j in range(len(column_lst1)):
+                value_lst[j].append(target[column_lst2[j]])
+        else:
+            for j in range(len(column_lst1)):
+                value_lst[j].append('na')
     dataframe1 = add_columns(dataframe1, column_lst1, value_lst)
 
     return dataframe1
