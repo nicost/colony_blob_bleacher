@@ -88,9 +88,9 @@ DISPLAYS
 # --------------------------
 # Please changes
 data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/"\
-                "20210203_CBB_nucleoliArsAndHeatshockTreatment/data/Ars_2hr_1/D2-Site_1_1"
+                "20210203_CBB_nucleoliArsAndHeatshockTreatment/data/WT/C2-Site_15_1"
 save_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/"\
-                "20210203_CBB_nucleoliArsAndHeatshockTreatment/dataAnalysis1/Ars_2hr_1/D2-Site_1_1"
+                "20210203_CBB_nucleoliArsAndHeatshockTreatment/dataAnalysis1/WT/C2-Site_15_1"
 analyze_organelle = 'nucleoli'  # only accepts 'sg' or 'nucleoli'
 frap_start_delay = 6  # 50ms default = 4; 100ms default = 5; 200ms default = 6
 display_mode = 'Y'  # only accepts 'N' or 'Y'
@@ -292,10 +292,12 @@ pointer_pd['bg_cor_int'] = ana.bg_correction(pointer_pd['raw_int'], [bg]*len(poi
 ctrl_pd['bg_cor_int'] = ana.bg_correction(ctrl_pd['raw_int'], [bg]*len(ctrl_pd))
 
 if analyze_organelle == 'nucleoli':
-    pointer_nuclear_bg_pd = pointer_pd.copy()
-    pointer_nuclear_bg_pd['bg_cor_int'] = ana.bg_correction(pointer_pd['raw_int'], pointer_pd['nuclear_bg_int'])
-    ctrl_nuclear_bg_pd = ctrl_pd.copy()
-    ctrl_nuclear_bg_pd['bg_cor_int'] = ana.bg_correction(ctrl_pd['raw_int'], ctrl_pd['nuclear_bg_int'])
+    pointer_nuclear_bg_pd = pointer_pd[pointer_pd['nuclear_bg_int'] != 'na'].copy().reset_index()
+    pointer_nuclear_bg_pd['bg_cor_int'] = ana.bg_correction(pointer_nuclear_bg_pd['raw_int'],
+                                                            pointer_nuclear_bg_pd['nuclear_bg_int'])
+    ctrl_nuclear_bg_pd = ctrl_pd[ctrl_pd['nuclear_bg_int'] != 'na'].copy().reset_index()
+    ctrl_nuclear_bg_pd['bg_cor_int'] = ana.bg_correction(ctrl_nuclear_bg_pd['raw_int'],
+                                                         ctrl_nuclear_bg_pd['nuclear_bg_int'])
 
 # filter control traces
 ctrl_pd_ft = ble.filter_ctrl(ctrl_pd)
