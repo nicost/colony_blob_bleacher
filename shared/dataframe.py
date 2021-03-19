@@ -40,6 +40,10 @@ List related:
     remove_elements
         FUNCTION: remove elements in lst that does not exist in allowed_elements
         SYNTAX:   remove_elements(lst: list, allowed_elements: list)
+    
+    select_multiple
+        FUNCTION: select multiple points from corresponding x,y coordinate lists
+        SYNTAX:   select_multiple(x_lst: list, y_lst: list, num)
 
 uManager related:
 
@@ -249,6 +253,24 @@ def remove_elements(lst: list, allowed_elements: list):
             out.append(lst[i])
     return out
 
+
+def select_multiple(x_lst: list, y_lst: list, num):
+    """
+    Select multiple points from corresponding x,y coordinate lists
+
+    :param x_lst: list, list of x coordinates
+    :param y_lst: list, list of y coordinates
+    :param num: number of points to be selected
+    :return:
+    """
+    out_y = []
+    out_x = []
+    label_idx = range(len(y_lst))
+    rand_idx = np.random.choice(label_idx, num)
+    for i in range(len(rand_idx)):
+        out_y.append(y_lst[rand_idx[i]])
+        out_x.append(x_lst[rand_idx[i]])
+    return out_x, out_y
 
 # ---------------------------------------------------------------------------------------------------
 # FUNCTIONS for UMANAGER
