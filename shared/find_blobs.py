@@ -28,6 +28,10 @@ get_binary_global
 select
     FUNCTION: selects subset of input dict
     SYNTAX:   select(in_list: list, key, in_min: int, in_max: int)
+
+select_lst
+    FUNCTION: select subset of input list
+    SYNTAX:   select_lst(x_lst: list, y_lst: list, in_min: float, in_max: float)
     
 """
 
@@ -185,6 +189,24 @@ def select(in_list: list, key, in_min: int, in_max: int):
                     out.append(test)
     return out
 
+
+def select_lst(x_lst: list, y_lst: list, in_min: float, in_max: float):
+    """
+    Selects subset of input x, y coordinates list
+
+    :param x_lst: list, list of x coordinates
+    :param y_lst: list, list of y coordinates
+    :param in_min: float, input minimum
+    :param in_max: float, input maximum
+    :return:
+    """
+    out_x = []
+    out_y = []
+    for i in range(len(x_lst)):
+        if in_min < x_lst[i] < in_max and in_min < y_lst[i] < in_max:
+            out_x.append(x_lst[i])
+            out_y.append(y_lst[i])
+    return out_x, out_y
 
 # canny filter and fill
 # hist, hist_centers = histogram(pixels)
