@@ -58,6 +58,10 @@ label_resort
 label_fill_holes
     FUNCTION: fill background holes in labeled images
     SYNTAX:   label_fill_holes(label_obj: np.array)
+    
+select_random_in_label
+    FUNCTION: select random positions in label image
+    SYNTAX:   select_random_in_label(label_obj: np.array, num: int)
 """
 
 
@@ -333,3 +337,24 @@ def label_fill_holes(label_obj: np.array):
             out[label_bg == index] = int(mean_index)
 
     return out
+
+
+def select_random_in_label(label_obj: np.array, num: int):
+    """
+    Select random positions in label image
+
+    :param label_obj: np.array, label image
+    :param num: number of random points to be selected
+    :return: x_lst: list, list of x coordinates
+             y_lst: list, list of y coordinates
+    """
+    y_lst = []
+    x_lst = []
+    for i in range(len(np.unique(label_obj))-1):
+        y_idx, x_idx = np.where(label_obj == i+1)
+        label_idx = range(len(y_idx))
+        rand_idx = np.random.choice(label_idx, num)
+        for j in range(len(rand_idx)):
+            y_lst.append(y_idx[rand_idx[j]])
+            x_lst.append(x_idx[rand_idx[j]])
+    return x_lst, y_lst
