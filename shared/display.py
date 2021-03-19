@@ -158,7 +158,7 @@ def napari_movie(store, cb):
 # ---------------------------------------------------------------------------------------------------
 
 
-def plot_offset_map(pointer_pd: pd.DataFrame, fitting_mode: str, storage_path: str):
+def plot_offset_map(pointer_pd: pd.DataFrame, fitting_mode: str, prefix: str, storage_path: str):
     """
     Plot and save the offset map for detected bleach spots (for FRAP analysis)
 
@@ -173,6 +173,7 @@ def plot_offset_map(pointer_pd: pd.DataFrame, fitting_mode: str, storage_path: s
                 'x_diff': difference in x coordinates between detected bleach spots and aim spots
                 'y_diff': difference in y coordinates between detected bleach spots and aim spots
     :param fitting_mode: str, fitting functions
+    :param prefix: str, storing prefix
     :param storage_path: str, directory to save image
 
     """
@@ -200,11 +201,12 @@ def plot_offset_map(pointer_pd: pd.DataFrame, fitting_mode: str, storage_path: s
     plt.xlabel('x offset (pixel)')
     plt.ylabel('y offset (pixel)')
     plt.legend(loc=2, bbox_to_anchor=(0.02, 0.99))
-    plt.savefig('%s/offset_map.pdf' % storage_path)
+    plt.savefig('%s/%s_offset_map.pdf' % (storage_path, prefix))
     plt.close()
 
 
-def plot_raw_intensity(pointer_pd: pd.DataFrame, ctrl_pd: pd.DataFrame, fitting_mode: str, storage_path: str):
+def plot_raw_intensity(pointer_pd: pd.DataFrame, ctrl_pd: pd.DataFrame, fitting_mode: str, prefix: str,
+                       storage_path: str):
     """
     Plot and save raw intensity measured from bleach spots, ctrl spots and background (for FRAP analysis)
 
@@ -223,6 +225,7 @@ def plot_raw_intensity(pointer_pd: pd.DataFrame, ctrl_pd: pd.DataFrame, fitting_
     :param ctrl_pd: pd.DataFrame, requires columns 'raw_int'
                 'raw_int': raw intensity of each control spot
     :param fitting_mode: str, fitting functions
+    :param prefix: str, storing prefix
     :param storage_path: str, directory to save image
 
     """
@@ -256,11 +259,11 @@ def plot_raw_intensity(pointer_pd: pd.DataFrame, ctrl_pd: pd.DataFrame, fitting_
         plt.xlabel('time (frame)')
         plt.ylabel('raw intensity (AU)')
         plt.legend(loc=2, bbox_to_anchor=(0.65, 0.99))
-        plt.savefig('%s/raw_intensity.pdf' % storage_path)
+        plt.savefig('%s/%s_raw_intensity.pdf' % (storage_path, prefix))
         plt.close()
 
 
-def plot_pb_factor(pointer_pd: pd.DataFrame, storage_path: str):
+def plot_pb_factor(pointer_pd: pd.DataFrame, prefix: str, storage_path: str):
     """
     Plot and save photobleaching factor curve and single exponential decay fitting curve calculated
     from control spots (for FRAP analysis)
@@ -272,6 +275,7 @@ def plot_pb_factor(pointer_pd: pd.DataFrame, storage_path: str):
                     (1 - a * (1 - np.exp(-b * x))) of photobleaching factor
                 'pb_single_exp_decay_a': parameter a of single exponential decay fit
                     (1 - a * (1 - np.exp(-b * x))) of photobleaching factor
+    :param prefix: str, storing prefix
     :param storage_path: str, directory to save image
 
     """
@@ -282,11 +286,11 @@ def plot_pb_factor(pointer_pd: pd.DataFrame, storage_path: str):
             plt.plot(pointer_pd['pb_single_exp_decay_fit'][0], '--', color=(0.8, 0.8, 0.8))
         plt.xlabel('time (frame)')
         plt.ylabel('photobleaching factor')
-        plt.savefig('%s/pb_factor.pdf' % storage_path)
+        plt.savefig('%s/%s_pb_factor.pdf' % (storage_path, prefix))
         plt.close()
 
 
-def plot_corrected_intensity(pointer_pd: pd.DataFrame, fitting_mode: str, storage_path: str):
+def plot_corrected_intensity(pointer_pd: pd.DataFrame, fitting_mode: str, prefix: str, storage_path: str):
     """
     Plot and save corrected intensity measured from bleach spots after both background and photobleaching
     correction (for FRAP analysis)
@@ -298,6 +302,7 @@ def plot_corrected_intensity(pointer_pd: pd.DataFrame, fitting_mode: str, storag
                 'frap_filter': if the FRAP curve passes the FRAP curve quality control or not
                 'mean_int': double corrected mean intensity of each bleach spot
     :param fitting_mode: str, fitting functions
+    :param prefix: str, storing prefix
     :param storage_path: str, directory to save image
 
     """
@@ -320,11 +325,11 @@ def plot_corrected_intensity(pointer_pd: pd.DataFrame, fitting_mode: str, storag
     plt.xlabel('time (frame)')
     plt.ylabel('bg/pb corrected intensity (AU)')
     plt.legend(loc=2, bbox_to_anchor=(0.65, 0.99))
-    plt.savefig('%s/double_corrected_intensity.pdf' % storage_path)
+    plt.savefig('%s/%s_double_corrected_intensity.pdf' % (storage_path, prefix))
     plt.close()
 
 
-def plot_normalized_frap(pointer_pd: pd.DataFrame, fitting_mode: str, storage_path: str):
+def plot_normalized_frap(pointer_pd: pd.DataFrame, fitting_mode: str, prefix: str, storage_path: str):
     """
     Plot and save normalized FRAP curves measured from bleach spots (for FRAP analysis)
 
@@ -336,6 +341,7 @@ def plot_normalized_frap(pointer_pd: pd.DataFrame, fitting_mode: str, storage_pa
                 'real_time_post': time series after frap_start_frame (included) displayed in second
                 'int_curve_post_nor': normalized double corrected intensity after frap_start_frame (included)
     :param fitting_mode: str, fitting functions
+    :param prefix: str, storing prefix
     :param storage_path: str, directory to save image
 
     """
@@ -362,11 +368,11 @@ def plot_normalized_frap(pointer_pd: pd.DataFrame, fitting_mode: str, storage_pa
     plt.xlabel('time (s)')
     plt.ylabel('normalized intensity (AU)')
     plt.legend(loc=2, bbox_to_anchor=(0.02, 0.99))
-    plt.savefig('%s/normalized_frap_curves.pdf' % storage_path)
+    plt.savefig('%s/%s_normalized_frap_curves.pdf' % (storage_path, prefix))
     plt.close()
 
 
-def plot_frap_fitting(pointer_pd: pd.DataFrame, fitting_mode: str, storage_path: str):
+def plot_frap_fitting(pointer_pd: pd.DataFrame, fitting_mode: str, prefix: str, storage_path: str):
     """
     Plot and save normalized FRAP curves and corresponding single exponential fitting measured from good
     bleach spots (for FRAP analysis)
@@ -383,6 +389,7 @@ def plot_frap_fitting(pointer_pd: pd.DataFrame, fitting_mode: str, storage_path:
                 'single_exp_fit': values from single exponential fit (a * (1 - np.exp(-b * x))) of
                     int_curve_post_nor
     :param fitting_mode: str, fitting functions
+    :param prefix: str, storing prefix
     :param storage_path: str, directory to save image
 
     """
@@ -399,7 +406,7 @@ def plot_frap_fitting(pointer_pd: pd.DataFrame, fitting_mode: str, storage_path:
                          color=cmap1_rgba[i + 1], alpha=0.7)
         plt.xlabel('time (s)')
         plt.ylabel('normalized intensity (AU)')
-        plt.savefig('%s/normalized_frap_curves_filtered.pdf' % storage_path)
+        plt.savefig('%s/%s_normalized_frap_curves_filtered.pdf' % (storage_path, prefix))
         plt.close()
 
         for i in range(len(pointer_pd)):
@@ -428,7 +435,7 @@ def plot_frap_fitting(pointer_pd: pd.DataFrame, fitting_mode: str, storage_path:
             plt.xlabel('time (s)')
             plt.ylabel('normalized intensity (AU)')
             plt.legend(loc=2, bbox_to_anchor=(0.02, 0.99))
-            plt.savefig('%s/frap_curves_filtered_%d.pdf' % (storage_path, i))
+            plt.savefig('%s/%s_frap_curves_filtered_%d.pdf' % (storage_path, prefix, i))
             plt.close()
 
 
