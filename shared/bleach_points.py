@@ -1,6 +1,7 @@
 import shared.dataframe as dat
 import shared.objects as obj
 import shared.analysis as ana
+import shared.math_functions as mat
 import collections
 from skimage.measure import label, regionprops
 import numpy as np
@@ -34,6 +35,18 @@ pd.DataFrame related:
     frap_filter
         FUNCTION: filter FRAP curves
         SYNTAX:   frap_filter(pointer_pd: pd.DataFrame, f: str)
+    
+    filter_ctrl
+        FUNCTION: filter control spots for FRAP photobleaching correction
+        SYNTAX:   filter_ctrl(df: pd.DataFrame)
+    
+    frap_pb_correction
+        FUNCTION: photobleaching correction for FRAP
+        SYNTAX:   frap_pb_correction(pointer_pd: pd.DataFrame, ctrl_pd: pd.DataFrame)
+    
+    frap_curve_fitting
+        FUNCTION: FRAP curve fitting
+        SYNTAX:   frap_curve_fitting(pointer_pd: pd.DataFrame)
     
 """
 
@@ -447,3 +460,95 @@ def frap_filter(pointer_pd: pd.DataFrame, f: str):
             frap_flt.append(1)
 
     return frap_flt
+
+
+def filter_ctrl(df: pd.DataFrame):
+    """
+    Filter control spots for FRAP curve photobleaching correction
+    :param df: pd.DataFrame, control spots dataframe
+    :return: df_ft: pd.DataFrame, sorted control spots dataframe
+    """
+    flt_ctrl = []
+    for i in range(len(df)):
+        ctrl_int = df['bg_cor_int'][i]
+        if (max(ctrl_int) - min(ctrl_int)) / max(ctrl_int) > 0.4:
+            flt_ctrl.append(0)
+        else:
+            flt_ctrl.append(1)
+    df['filter'] = flt_ctrl
+    df_ft = df[df['filter'] == 1].reset_index()
+    return df_ft
+
+
+def frap_pb_correction(pointer_pd: pd.DataFrame, ctrl_pd: pd.DataFrame):
+    """
+    Photobleaching correction for FRAP
+    :param pointer_pd: pd.DataFrame, dataframe of all the bleach spots
+    :param ctrl_pd: pd.DataFrame, dataframe of control spots
+    :return:
+    """
+    # calculate photobleaching factor
+    pb_factor = ana.get_pb_factor(ctrl_pd['bg_cor_int'])
+
+    pointer_pd['pb_factor'] = [pb_factor] * len(pointer_pd)
+
+    # pb_factor fitting with single exponential decay
+    pb_fit = mat.fitting_single_exp_decay(np.arange(0, len(pb_factor), 1), pb_factor)
+    pointer_pd = dat.add_columns(pointer_pd, ['pb_single_exp_decay_fit', 'pb_single_exp_decay_r2',
+                                              'pb_single_exp_decay_a', 'pb_single_exp_decay_b',
+                                              'pb_single_exp_decay_c'],
+                                 [[pb_fit[0]] * len(pointer_pd), [pb_fit[1]] * len(pointer_pd),
+                                  [pb_fit[2]] * len(pointer_pd), [pb_fit[3]] * len(pointer_pd),
+                                  [pb_fit[4]] * len(pointer_pd)])
+
+    # photobleaching correction
+    if np.isnan(pb_fit[2]):
+        pb = pb_factor
+    else:
+        pb = pb_fit[0]
+    pointer_pd['mean_int'] = ana.pb_correction(pointer_pd['bg_cor_int'], pb)
+    return pointer_pd
+
+
+def frap_curve_fitting(pointer_pd: pd.DataFrame):
+    """
+    FRAP curve fitting
+    :param pointer_pd: pd.DataFrame, dataframe of all the bleach spots
+    :return:
+    """
+    # curve fitting with linear to determine initial slope
+    linear_fit_pd = mat.frap_fitting_linear(pointer_pd['real_time_post'], pointer_pd['int_curve_post_nor'])
+    pointer_pd = pd.concat([pointer_pd, linear_fit_pd], axis=1)
+
+    # curve fitting with single exponential function
+    single_exp_fit_pd = mat.frap_fitting_single_exp(pointer_pd['real_time_post'],
+                                                    pointer_pd['int_curve_post_nor'], pointer_pd['sigma'])
+    pointer_pd = pd.concat([pointer_pd, single_exp_fit_pd], axis=1)
+
+    # curve fitting with soumpasis function
+    soumpasis_fit_pd = mat.frap_fitting_soumpasis(pointer_pd['real_time_post'],
+                                                  pointer_pd['int_curve_post_nor'], pointer_pd['sigma'])
+    pointer_pd = pd.concat([pointer_pd, soumpasis_fit_pd], axis=1)
+
+    # curve fitting with double exponential function
+    double_exp_fit_pd = mat.frap_fitting_double_exp(pointer_pd['real_time_post'],
+                                                    pointer_pd['int_curve_post_nor'], pointer_pd['sigma'])
+    pointer_pd = pd.concat([pointer_pd, double_exp_fit_pd], axis=1)
+
+    # curve fitting with ellenberg function
+    ellenberg_fit_pd = mat.frap_fitting_ellenberg(pointer_pd['real_time_post'],
+                                                  pointer_pd['int_curve_post_nor'], pointer_pd['sigma'])
+    pointer_pd = pd.concat([pointer_pd, ellenberg_fit_pd], axis=1)
+
+    # find optimal fitting
+    optimal_fit_pd = mat.find_optimal_fitting(pointer_pd, ['single_exp', 'soumpasis', 'ellenberg', 'double_exp'])
+    pointer_pd = pd.concat([pointer_pd, optimal_fit_pd], axis=1)
+
+    # filter frap curves
+    pointer_pd['frap_filter_single_exp'] = frap_filter(pointer_pd, 'single_exp')
+    pointer_pd['frap_filter_soumpasis'] = frap_filter(pointer_pd, 'soumpasis')
+    pointer_pd['frap_filter_double_exp'] = frap_filter(pointer_pd, 'double_exp')
+    pointer_pd['frap_filter_ellenberg'] = frap_filter(pointer_pd, 'ellenberg')
+    pointer_pd['frap_filter_optimal'] = frap_filter(pointer_pd, 'optimal')
+
+    return pointer_pd
