@@ -11,7 +11,7 @@ else:
 from matplotlib.figure import Figure
 from vispy.color import Colormap
 from shared.find_organelles import find_organelle, organelle_analysis, find_nuclear_nucleoli, nuclear_analysis
-from skimage.measure import label
+from skimage.measure import label, regionprops_table
 from skimage.morphology import medial_axis
 import shared.analysis as ana
 import shared.dataframe as dat
@@ -95,6 +95,7 @@ analyze_organelle = 'nucleoli'  # only accepts 'sg' or 'nucleoli'
 frap_start_delay = 6  # 50ms default = 4; 100ms default = 5; 200ms default = 6
 display_mode = 'Y'  # only accepts 'N' or 'Y'
 display_sort = 'pre_bleach_int'  # accepts 'na' or other features like 'sg_size'
+display_data = 'local'  # only accepts 'bg' or 'local'
 
 # values for analysis
 data_c = 0
@@ -161,12 +162,12 @@ pix = np.reshape(temp.get_raw_pixels(), newshape=[temp.get_height(), temp.get_wi
 
 if analyze_organelle == 'nucleoli':
     # nuclear detection (currently only doable for nucleoli staining image)
-    label_nuclear = find_nuclear_nucleoli(pix)
+    label_nuclear, _ = find_nuclear_nucleoli(pix)
     data_log['num_nuclei_detected'] = [np.amax(label_nuclear)]
     print("Found %d nuclei." % data_log['num_nuclei_detected'][0])
 
 # organelle detection
-organelle = find_organelle(pix, thresholding, min_size=min_size, max_size=max_size)
+organelle_before_filter, organelle = find_organelle(pix, thresholding, min_size=min_size, max_size=max_size)
 label_organelle = label(organelle, connectivity=1)
 data_log['num_%s_detected' % analyze_organelle] = [obj.object_count(organelle)]
 print("Found %d %s." % (data_log['num_%s_detected' % analyze_organelle][0], analyze_organelle))
@@ -180,12 +181,26 @@ if analyze_organelle == 'nucleoli':
     round_y = [round(num) for num in organelle_pd['y']]
     organelle_pd['nuclear'] = obj.points_in_objects(label_nuclear, round_y, round_x)
 
+    # nuclear pd dataset
+    nuclear_pd = nuclear_analysis(label_nuclear, organelle_pd, pos)
+
+    # calculate nuclear background intensity
+    # calculate nuclear without nucleoli region
+    label_nuclear_bg = label_nuclear.copy()
+    label_nuclear_bg[organelle_before_filter == 1] = 0
+    # get label_nuclear_bg_pd
+    label_nuclear_bg_pd = pd.DataFrame(regionprops_table(label_nuclear_bg, properties=['label']))
+    label_nuclear_bg_pd['mean_intensity'] = ana.get_intensity(label_nuclear_bg, pixels_tseries)
+    # assign nuclear background intensity to corresponding nuclear
+    nuclear_pd = dat.copy_based_on_index(nuclear_pd, label_nuclear_bg_pd, 'nuclear', 'label',
+                                         ['nuclear_bg_int'], ['mean_intensity'])
+    # assign nuclear background intensity to corresponding nucleoli
+    organelle_pd = dat.copy_based_on_index(organelle_pd, nuclear_pd, 'nuclear', 'nuclear',
+                                           ['nuclear_bg_int'], ['nuclear_bg_int'])
+
     data_log['num_nucleoli_in_nuclei'] = [len(organelle_pd[organelle_pd['nuclear'] != 0])]
     print("Found %d out of %d nucleoli within nuclei." % (data_log['num_nucleoli_in_nuclei'][0],
                                                           obj.object_count(organelle)))
-
-    # nuclear pd dataset
-    nuclear_pd = nuclear_analysis(label_nuclear, organelle_pd, pos)
 
 # ----------------------------------
 # BLEACH SPOTS DETECTION
@@ -227,6 +242,10 @@ pointer_pd = dat.copy_based_on_index(pointer_pd, organelle_pd, '%s' % analyze_or
                                       '%s_circ' % analyze_organelle],
                                      ['x', 'y', 'size', 'raw_int', 'circ'])
 
+if analyze_organelle == 'nucleoli':
+    pointer_pd = dat.copy_based_on_index(pointer_pd, organelle_pd, 'nucleoli', 'nucleoli',
+                                         ['nuclear', 'nuclear_bg_int'], ['nuclear', 'nuclear_bg_int'])
+
 # --------------------------------------------------
 # FRAP CURVE ANALYSIS from bleach spots
 # --------------------------------------------------
@@ -241,10 +260,16 @@ num_ctrl_spots = obj.object_count(ctrl_spots)
 pointer_pd['num_ctrl_spots'] = [num_ctrl_spots] * len(pointer_pd)
 
 # get raw intensities for bleach spots and control spots
-pointer_pd['raw_int'] = ana.get_intensity(bleach_spots, pixels_tseries)
-ctrl_spots_int_tseries = ana.get_intensity(ctrl_spots, pixels_tseries)
+pointer_pd['raw_int'] = ana.get_intensity(label(bleach_spots, connectivity=1), pixels_tseries)
+ctrl_spots_int_tseries = ana.get_intensity(label(ctrl_spots, connectivity=1), pixels_tseries)
 ctrl_pd = pd.DataFrame({'pos': [pos] * num_ctrl_spots, 'ctrl_spots': np.arange(0, num_ctrl_spots, 1),
-                        'raw_int': ctrl_spots_int_tseries})
+                        'x': ctrl_y, 'y': ctrl_x, 'raw_int': ctrl_spots_int_tseries})
+
+# link ctrl spots with corresponding organelle
+ctrl_pd['%s' % analyze_organelle] = obj.points_in_objects(label_organelle, ctrl_pd['x'], ctrl_pd['y'])
+if analyze_organelle == 'nucleoli':
+    ctrl_pd = dat.copy_based_on_index(ctrl_pd, organelle_pd, 'nucleoli', 'nucleoli',
+                                  ['nuclear', 'nuclear_bg_int'], ['nuclear', 'nuclear_bg_int'])
 
 print("### Image analysis: background correction ...")
 # background intensity measurement
@@ -263,92 +288,37 @@ if np.isnan(bg_fit[2]):
     bg = bg_int_tseries
 else:
     bg = bg_fit[0]
-pointer_pd['bg_cor_int'] = ana.bg_correction(pointer_pd['raw_int'], bg)
-ctrl_pd['bg_cor_int'] = ana.bg_correction(ctrl_pd['raw_int'], bg)
+pointer_pd['bg_cor_int'] = ana.bg_correction(pointer_pd['raw_int'], [bg]*len(pointer_pd))
+ctrl_pd['bg_cor_int'] = ana.bg_correction(ctrl_pd['raw_int'], [bg]*len(ctrl_pd))
+
+if analyze_organelle == 'nucleoli':
+    pointer_nuclear_bg_pd = pointer_pd.copy()
+    pointer_nuclear_bg_pd['bg_cor_int'] = ana.bg_correction(pointer_pd['raw_int'], pointer_pd['nuclear_bg_int'])
+    ctrl_nuclear_bg_pd = ctrl_pd.copy()
+    ctrl_nuclear_bg_pd['bg_cor_int'] = ana.bg_correction(ctrl_pd['raw_int'], ctrl_pd['nuclear_bg_int'])
 
 # filter control traces
-filter_ctrl = []
-for i in range(len(ctrl_pd)):
-    ctrl_int = ctrl_pd['bg_cor_int'][i]
-    if (max(ctrl_int) - min(ctrl_int)) / max(ctrl_int) > 0.4:
-        filter_ctrl.append(0)
-    else:
-        filter_ctrl.append(1)
-ctrl_pd['filter'] = filter_ctrl
-ctrl_pd_ft = ctrl_pd[ctrl_pd['filter'] == 1].reset_index()
+ctrl_pd_ft = ble.filter_ctrl(ctrl_pd)
 pointer_pd['num_ctrl_spots_ft'] = [len(ctrl_pd_ft)] * len(pointer_pd)
 data_log['num_ctrl_spots'] = len(ctrl_pd_ft)
+
+if analyze_organelle == 'nucleoli':
+    ctrl_nuclear_bg_pd_ft = ble.filter_ctrl(ctrl_nuclear_bg_pd)
+    pointer_nuclear_bg_pd['num_ctrl_spots_ft'] = [len(ctrl_nuclear_bg_pd_ft)] * len(pointer_nuclear_bg_pd)
+    data_log['num_ctrl_spots_nuclear_bg'] = len(ctrl_nuclear_bg_pd_ft)
 
 print("### Image analysis: photobleaching correction ...")
 # photobleaching factor calculation
 if len(ctrl_pd_ft) != 0:
-    # calculate photobleaching factor
-    pb_factor = ana.get_pb_factor(ctrl_pd_ft['bg_cor_int'])
-
-    pointer_pd['pb_factor'] = [pb_factor] * len(pointer_pd)
-    print("%d ctrl points are used to correct photobleaching." % len(ctrl_pd_ft))
-
-    # pb_factor fitting with single exponential decay
-    pb_fit = mat.fitting_single_exp_decay(np.arange(0, len(pb_factor), 1), pb_factor)
-    pointer_pd = dat.add_columns(pointer_pd, ['pb_single_exp_decay_fit', 'pb_single_exp_decay_r2',
-                                              'pb_single_exp_decay_a', 'pb_single_exp_decay_b',
-                                              'pb_single_exp_decay_c'],
-                                 [[pb_fit[0]] * len(pointer_pd), [pb_fit[1]] * len(pointer_pd),
-                                  [pb_fit[2]] * len(pointer_pd), [pb_fit[3]] * len(pointer_pd),
-                                  [pb_fit[4]] * len(pointer_pd)])
-
-    # photobleaching correction
-    if np.isnan(pb_fit[2]):
-        pb = pb_factor
-    else:
-        pb = pb_fit[0]
-    pointer_pd['mean_int'] = ana.pb_correction(pointer_pd['bg_cor_int'], pb)
-
+    pointer_pd = ble.frap_pb_correction(pointer_pd, ctrl_pd_ft)
     # normalize frap curve and measure mobile fraction and t-half based on curve itself
     frap_pd = ble.frap_analysis(pointer_pd, max_t, acquire_time_tseries, real_time, frap_start_delay,
                                 frap_start_mode)
     pointer_pd = pd.concat([pointer_pd, frap_pd], axis=1)
 
-    # --------------------------------------------------
-    # FRAP CURVE FITTING
-    # --------------------------------------------------
+    # frap curve fitting
     print("### Imaging analysis: curve fitting ...")
-
-    # curve fitting with linear to determine initial slope
-    linear_fit_pd = mat.frap_fitting_linear(pointer_pd['real_time_post'], pointer_pd['int_curve_post_nor'])
-    pointer_pd = pd.concat([pointer_pd, linear_fit_pd], axis=1)
-
-    # curve fitting with single exponential function
-    single_exp_fit_pd = mat.frap_fitting_single_exp(pointer_pd['real_time_post'],
-                                                    pointer_pd['int_curve_post_nor'], pointer_pd['sigma'])
-    pointer_pd = pd.concat([pointer_pd, single_exp_fit_pd], axis=1)
-
-    # curve fitting with soumpasis function
-    soumpasis_fit_pd = mat.frap_fitting_soumpasis(pointer_pd['real_time_post'],
-                                                  pointer_pd['int_curve_post_nor'], pointer_pd['sigma'])
-    pointer_pd = pd.concat([pointer_pd, soumpasis_fit_pd], axis=1)
-
-    # curve fitting with double exponential function
-    double_exp_fit_pd = mat.frap_fitting_double_exp(pointer_pd['real_time_post'],
-                                                    pointer_pd['int_curve_post_nor'], pointer_pd['sigma'])
-    pointer_pd = pd.concat([pointer_pd, double_exp_fit_pd], axis=1)
-
-    # curve fitting with ellenberg function
-    ellenberg_fit_pd = mat.frap_fitting_ellenberg(pointer_pd['real_time_post'],
-                                                  pointer_pd['int_curve_post_nor'], pointer_pd['sigma'])
-    pointer_pd = pd.concat([pointer_pd, ellenberg_fit_pd], axis=1)
-
-    # find optimal fitting
-    optimal_fit_pd = mat.find_optimal_fitting(pointer_pd, ['single_exp', 'soumpasis', 'ellenberg', 'double_exp'])
-    pointer_pd = pd.concat([pointer_pd, optimal_fit_pd], axis=1)
-
-    # filter frap curves
-    pointer_pd['frap_filter_single_exp'] = ble.frap_filter(pointer_pd, 'single_exp')
-    pointer_pd['frap_filter_soumpasis'] = ble.frap_filter(pointer_pd, 'soumpasis')
-    pointer_pd['frap_filter_double_exp'] = ble.frap_filter(pointer_pd, 'double_exp')
-    pointer_pd['frap_filter_ellenberg'] = ble.frap_filter(pointer_pd, 'ellenberg')
-    pointer_pd['frap_filter_optimal'] = ble.frap_filter(pointer_pd, 'optimal')
-
+    pointer_pd = ble.frap_curve_fitting(pointer_pd)
     pointer_pd['pos'] = [pos] * len(pointer_pd)
     pointer_ft_pd = pointer_pd[pointer_pd['frap_filter_%s' % fitting_mode] == 1]
     data_log['num_frap_curves'] = [len(pointer_ft_pd)]
@@ -370,20 +340,19 @@ if len(ctrl_pd_ft) != 0:
     pointer_pd.to_csv('%s/data_full.txt' % storage_path, index=False, sep='\t')
     # dataset of control spots
     ctrl_pd.to_csv('%s/data_ctrl.txt' % storage_path, index=False, sep='\t')
-    if analyze_organelle == 'nucleoli':
-        # dataset of nuclear
-        nuclear_pd.to_csv('%s/data_nuclear.txt' % storage_path, index=False, sep='\t')
     # dataset of organelle
     organelle_pd.to_csv('%s/data_%s.txt' % (storage_path, analyze_organelle), index=False, sep='\t')
 
     # images
-    dis.plot_offset_map(pointer_pd, fitting_mode, storage_path)  # offset map
-    dis.plot_raw_intensity(pointer_pd, ctrl_pd_ft, fitting_mode, storage_path)  # raw intensity
-    dis.plot_pb_factor(pointer_pd, storage_path)  # photobleaching factor
-    dis.plot_corrected_intensity(pointer_pd, fitting_mode, storage_path)  # intensity after dual correction
-    dis.plot_normalized_frap(pointer_pd, fitting_mode, storage_path)  # normalized FRAP curves
-    dis.plot_frap_fitting(pointer_pd, fitting_mode, storage_path)  # normalized FRAP curves after filtering with fitting
+    dis.plot_offset_map(pointer_pd, fitting_mode, 'bg', storage_path)  # offset map
+    dis.plot_raw_intensity(pointer_pd, ctrl_pd_ft, fitting_mode, 'bg', storage_path)  # raw intensity
+    dis.plot_pb_factor(pointer_pd, 'bg', storage_path)  # photobleaching factor
+    dis.plot_corrected_intensity(pointer_pd, fitting_mode, 'bg', storage_path)  # intensity after dual correction
+    dis.plot_normalized_frap(pointer_pd, fitting_mode, 'bg', storage_path)  # normalized FRAP curves
+    # normalized FRAP curves after filtering with fitting
     # individual normalized FRAP curves with fitting
+    dis.plot_frap_fitting(pointer_pd, fitting_mode, 'bg', storage_path)
+
 else:
     # --------------------------
     # OUTPUT
@@ -395,6 +364,49 @@ else:
         os.makedirs(storage_path)
     # data_log
     data_log.to_csv('%s/data_log.txt' % storage_path, index=False, sep='\t')
+
+if analyze_organelle == 'nucleoli':
+    print("### Imaging analysis based on nuclear background: photobleaching correction ...")
+    if len(ctrl_nuclear_bg_pd_ft) != 0:
+        pointer_nuclear_bg_pd = ble.frap_pb_correction(pointer_nuclear_bg_pd, ctrl_nuclear_bg_pd_ft)
+        # normalize frap curve and measure mobile fraction and t-half based on curve itself
+        frap_nuclear_bg_pd = ble.frap_analysis(pointer_nuclear_bg_pd, max_t, acquire_time_tseries, real_time,
+                                               frap_start_delay, frap_start_mode)
+        pointer_nuclear_bg_pd = pd.concat([pointer_nuclear_bg_pd, frap_nuclear_bg_pd], axis=1)
+
+        # frap curve fitting
+        print("### Imaging analysis based on nuclear background: curve fitting ...")
+        pointer_nuclear_bg_pd = ble.frap_curve_fitting(pointer_nuclear_bg_pd)
+        pointer_nuclear_bg_pd['pos'] = [pos] * len(pointer_nuclear_bg_pd)
+        pointer_nuclear_bg_ft_pd = pointer_nuclear_bg_pd[pointer_nuclear_bg_pd['frap_filter_%s' % fitting_mode] == 1]
+        data_log['num_frap_curves_nuclear_bg'] = [len(pointer_nuclear_bg_ft_pd)]
+        print("%d spots passed filters for FRAP curve quality control." % data_log['num_frap_curves_nuclear_bg'][0])
+
+        # --------------------------
+        # OUTPUT
+        # --------------------------
+        print("### Export data ...")
+
+        # measurements
+        # data_log
+        data_log.to_csv('%s/data_log.txt' % storage_path, index=False, sep='\t')
+        # dataset of nuclear
+        nuclear_pd.to_csv('%s/data_nuclear.txt' % storage_path, index=False, sep='\t')
+        # dataset of nuclear background corrected FRAP data
+        pointer_nuclear_bg_pd.to_csv('%s/data_full_nuclear_bg.txt' % storage_path, index=False, sep='\t')
+
+        # images
+        dis.plot_offset_map(pointer_nuclear_bg_pd, fitting_mode, 'nuclear_bg', storage_path)  # offset map
+        # raw intensity
+        dis.plot_raw_intensity(pointer_nuclear_bg_pd, ctrl_nuclear_bg_pd_ft, fitting_mode, 'nuclear_bg', storage_path)
+        dis.plot_pb_factor(pointer_nuclear_bg_pd, 'nuclear_bg', storage_path)  # photobleaching factor
+        # intensity after dual correction
+        dis.plot_corrected_intensity(pointer_nuclear_bg_pd, fitting_mode, 'nuclear_bg', storage_path)
+        # normalized FRAP curves
+        dis.plot_normalized_frap(pointer_nuclear_bg_pd, fitting_mode, 'nuclear_bg', storage_path)
+        # normalized FRAP curves after filtering with fitting
+        # individual normalized FRAP curves with fitting
+        dis.plot_frap_fitting(pointer_nuclear_bg_pd, fitting_mode, 'nuclear_bg', storage_path)
 
 # --------------------------
 # OUTPUT DISPLAY
@@ -449,15 +461,27 @@ if display_mode == 'Y':
             viewer.add_image(label(bleach_spots), name='bleach spots', colormap=('winter woBg', cmap2_napari))
 
         # matplotlib display
-        if len(ctrl_pd_ft) != 0:
-            if display_sort == 'na':
-                pointer_sort = pointer_pd
-            else:
-                # sorted based on feature (color coded)
-                pointer_sort = \
-                    pointer_pd.sort_values(by='%s' % display_sort).reset_index(drop=True)
-                # from small to large
+        if display_data == 'bg':
+            if len(ctrl_pd_ft) != 0:
+                if display_sort == 'na':
+                    pointer_sort = pointer_pd
+                else:
+                    # sorted based on feature (color coded)
+                    # from small to large
+                    pointer_sort = \
+                        pointer_pd.sort_values(by='%s' % display_sort).reset_index(drop=True)
+        else:
+            if len(ctrl_nuclear_bg_pd_ft) != 0:
+                if display_sort == 'na':
+                    pointer_sort = pointer_nuclear_bg_pd
+                else:
+                    # sorted based on feature (color coded)
+                    # from small to large
+                    pointer_sort = \
+                        pointer_nuclear_bg_pd.sort_values(by='%s' % display_sort).reset_index(drop=True)
 
+        if ((display_data == 'bg') & (len(ctrl_pd_ft) != 0)) | ((display_data == 'local')
+                                                                & (len(ctrl_nuclear_bg_pd_ft) != 0)):
             # Plot-left: FRAP curves of filtered analysis spots after intensity correction (absolute intensity)
             for i in range(len(pointer_sort)):
                 ax1.plot(pointer_sort['mean_int'][i], color=cmap2_rgba[i + 1])
