@@ -133,7 +133,7 @@ for idx in range(pos_list.get_number_of_positions()):
 
         for i in range(len(shots[0])):
             # Note that MM has x-y coordinates, and Python uses row-column (equivalent to y-x)
-            projector.add_point_to_point_and_shoot_queue(shots[1][i], shots[0][i])
+            projector.add_point_to_point_and_shoot_queue(shots[0][i], shots[1][i])
             time.sleep(0.07)
         print(pos.get_label(), ": Shots ", len(shots[0]))
         while mmc.is_sequence_running(mmc.get_camera_device()):
