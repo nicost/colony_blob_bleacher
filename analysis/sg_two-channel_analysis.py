@@ -87,7 +87,7 @@ for i in range(max_t+1):
     pix = np.reshape(temp.get_raw_pixels(), newshape=[temp.get_height(), temp.get_width()])
     temp1 = store.get_image(cb.t(i).c(data_c_sample).z(0).p(data_p).build())
     pix1 = np.reshape(temp1.get_raw_pixels(), newshape=[temp1.get_height(), temp1.get_width()])
-    sg = find_organelle(pix, thresholding, min_size=min_size, max_size=max_size)
+    _, sg = find_organelle(pix, thresholding, min_size=min_size, max_size=max_size)
 
     pix_tseries.append(pix)
     pix1_tseries.append(pix1)
