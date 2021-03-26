@@ -10,10 +10,10 @@ import os
 # PARAMETERS ALLOW CHANGE
 # --------------------------
 # paths
-data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/20210224_SG_Top10_ArsTreatments/" \
-            "1235678910_1"
-save_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/20210224_SG_Top10_ArsTreatments/" \
-            "dataAnalysis"
+data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/"\
+            "20210323_SG_top10MonoclonalCells/95-5_5_7_8_1-2"
+save_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/20210323_SG_top10MonoclonalCells/" \
+            "dataAnalysis/95-5_5_7_8_1-2"
 
 # values for analysis
 data_c_G3BP1 = 1  # channel for G3BP1-mScarlet  1:G3BP1-mScarlet channel
@@ -64,6 +64,8 @@ bg_sample_lst = []
 fov_sample_lst = []
 
 for pos in range(max_p+1):
+# for pos in np.arange(1000, 1550, 1):
+    pos = int(pos)
     print('Analyzing pos: %s/%s' % (pos+1, max_p + 1))
     for frame in range(max_t+1):
         # get G3BP1 image
@@ -74,7 +76,7 @@ for pos in range(max_p+1):
         temp1 = store.get_image(cb.t(frame).c(data_c_sample).z(0).p(pos).build())
         pix1 = np.reshape(temp1.get_raw_pixels(), newshape=[temp1.get_height(), temp1.get_width()])
         # identify stress granule
-        sg = find_organelle(pix, thresholding, min_size=min_size, max_size=max_size)
+        _, sg = find_organelle(pix, thresholding, min_size=min_size, max_size=max_size)
         label_sg = label(sg, connectivity=1)
         # total image
         fov = np.ones_like(pix)
