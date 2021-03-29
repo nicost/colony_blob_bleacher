@@ -103,7 +103,7 @@ for idx in range(pos_list.get_number_of_positions()):
     img = mm.live().snap(False).get(0)
     pixels = np.reshape(img.get_raw_pixels(), newshape=[img.get_height(), img.get_width()])
     # find organelles using a combination of thresholding and watershed
-    segmented = find_organelle(pixels, 'local-nucleoli', 500, 200, 10, 1000)
+    _, segmented = find_organelle(pixels, 'local-nucleoli', 500, 200, 10, 1000)
     label_img = label(segmented)
     label_img = morphology.remove_small_objects(label_img, 5)
     blobs = regionprops(label_img)
