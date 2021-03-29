@@ -14,10 +14,10 @@ import os
 
 # Please changes
 data_source = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/"\
-                "20210203_CBB_nucleoliArsAndHeatshockTreatment/data/HS_30min"
-save_name = 'dataAnalysis_dis'
+        "20210319_CBB_nucleoliFRAPexposureIntensityAndNonCentroidPhotobleachingTest/WT_centroid_GFP24-9973_100ms"
+save_name = 'dataAnalysis'
 analyze_organelle = 'nucleoli'  # only accepts 'sg' or 'nucleoli'
-frap_start_delay = 6  # 50ms default = 4; 100ms default = 5; 200ms default = 6
+frap_start_delay = 5  # 50ms default = 4; 100ms default = 5; 200ms default = 6
 
 # values for analysis
 data_c = 0
