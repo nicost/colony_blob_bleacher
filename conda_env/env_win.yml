@@ -53,7 +53,6 @@ dependencies:
   - importlib_metadata=3.1.1=hd8ed1ab_0
   - intel-openmp=2020.3=h57928b3_311
   - ipykernel=5.3.4=py37h7b7c402_1
-  - ipython=7.19.0=py37heaed05f_0
   - ipython_genutils=0.2.0=py_1
   - ipywidgets=7.5.1=pyh9f0ad1d_1
   - jedi=0.17.2=py37h03978a9_1
@@ -82,7 +81,7 @@ dependencies:
   - libwebp-base=1.1.0=h8ffe710_3
   - libzopfli=1.0.3=h0e60522_0
   - locket=0.2.0=py_2
-  - lz4-c=1.9.2=h62dcd97_2
+  - - ipython=7.19.0=py37heaed05f_0 oz4-c=1.9.2=h62dcd97_2
   - m2w64-gcc-libgfortran=5.3.0=6
   - m2w64-gcc-libs=5.3.0=7
   - m2w64-gcc-libs-core=5.3.0=7
@@ -192,6 +191,6 @@ dependencies:
   - zlib=1.2.11=h62dcd97_1010
   - zstd=1.4.5=h1f3a1b7_2
   - pip:
-    - pycromanager==0.6.0
+    - pycromanager==0.12.7
     - zmq==0.0.0
 prefix: C:\Users\NicoLocal\anaconda3\envs\napari
