@@ -10,10 +10,10 @@ import os
 # PARAMETERS ALLOW CHANGE
 # --------------------------
 # paths
-data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/"\
-            "20210323_SG_top10MonoclonalCells/95-5_5_7_8_1-2"
-save_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/20210323_SG_top10MonoclonalCells/" \
-            "dataAnalysis/95-5_5_7_8_1-2"
+data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/20210330_SG_top10MonoclonalCells/"\
+            "plate2_1"
+save_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/20210330_SG_top10MonoclonalCells/"\
+            "dataAnalysis/plate2_1"
 
 # values for analysis
 data_c_G3BP1 = 1  # channel for G3BP1-mScarlet  1:G3BP1-mScarlet channel
