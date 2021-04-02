@@ -88,9 +88,9 @@ DISPLAYS
 # --------------------------
 # Please changes
 data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/"\
-                "20210203_CBB_nucleoliArsAndHeatshockTreatment/data/WT1/C2-Site_15_1"
+                "20210203_CBB_nucleoliArsAndHeatshockTreatment/data/WT1/C2-Site_0_1"
 save_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/"\
-                "20210203_CBB_nucleoliArsAndHeatshockTreatment/dataAnalysis1/WT1/C2-Site_15_1"
+                "20210203_CBB_nucleoliArsAndHeatshockTreatment/dataAnalysis1/WT1/C2-Site_0_1"
 analyze_organelle = 'nucleoli'  # only accepts 'sg' or 'nucleoli'
 frap_start_delay = 6  # 50ms default = 4; 100ms default = 5; 200ms default = 6
 display_mode = 'Y'  # only accepts 'N' or 'Y'
