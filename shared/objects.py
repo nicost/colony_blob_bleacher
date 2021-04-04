@@ -5,6 +5,7 @@ from skimage.measure import label, regionprops
 from skimage.filters import sobel
 from skimage import segmentation
 import math
+import random
 
 """
 # ---------------------------------------------------------------------------------------------------
@@ -353,7 +354,7 @@ def select_random_in_label(label_obj: np.array, num: int):
     for i in range(len(np.unique(label_obj))-1):
         y_idx, x_idx = np.where(label_obj == i+1)
         label_idx = range(len(y_idx))
-        rand_idx = np.random.choice(label_idx, num)
+        rand_idx = random.sample(label_idx, num)
         for j in range(len(rand_idx)):
             y_lst.append(y_idx[rand_idx[j]])
             x_lst.append(x_idx[rand_idx[j]])
