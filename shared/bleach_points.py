@@ -24,6 +24,10 @@ pd.DataFrame related:
         FUNCTION: generate bleach spots mask and corresponding pd.DataFrame table
         SYNTAX:   get_bleach_spots(log_pd: pd.DataFrame, label_nucleoli: np.array, num_dilation=3)
     
+    get_spots
+        FUNCTION: generate spots mask and corresponding pd.DataFrame table
+        SYNTAX:   get_spots(x_lst: list, y_lst: list, pixels_same_size: np.array, num_dilation=3)
+    
     filter_bleach_spots
         FUNCTION: filter bleach spots
         SYNTAX:   filter_bleach_spots(log_pd: pd.DataFrame)
@@ -193,6 +197,35 @@ def get_bleach_spots(log_pd: pd.DataFrame, label_nucleoli: np.array, analyze_org
     pointer_pd = pointer_pd.sort_values(by='bleach_spots').reset_index(drop=True)
 
     return bleach_spots_ft, pointer_pd
+
+
+def get_spots(x_lst: list, y_lst: list, pixels_same_size: np.array, num_dilation=3):
+    """
+    Generate spots mask and corresponding pd.DataFrame table
+
+    :param x_lst: list, list of x coordinates
+    :param y_lst: list, list of y coordinates
+    :param pixels_same_size: np.array, any image of the same size
+    :param num_dilation: int, number of dilation applied, default: 3
+    :return:
+    """
+    spots = ana.analysis_mask(y_lst, x_lst, pixels_same_size, num_dilation)
+    label_spots = label(spots, connectivity=1)
+    pd_spots = pd.DataFrame({'x': x_lst, 'y': y_lst})
+    pd_spots['spots'] = obj.points_in_objects(label_spots, pd_spots['x'], pd_spots['y'])
+
+    # filter spots
+    pointer_same_spots = [item for item, count in collections.Counter(pd_spots['spots'].tolist()).items() if count > 1]
+    pd_spots = pd_spots[~pd_spots['spots'].isin(pointer_same_spots)]
+    del pd_spots['spots']  # delete previous bleach_spots information
+    pd_spots = pd_spots.reset_index(drop=True)  # reset index
+
+    spots_ft = ana.analysis_mask(pd_spots['y'], pd_spots['x'], pixels_same_size, num_dilation)
+    label_spots_ft = label(spots_ft, connectivity=1)
+    # link pointer with corresponding filtered bleach spots
+    pd_spots['spots'] = obj.points_in_objects(label_spots_ft, pd_spots['x'], pd_spots['y'])
+    pd_spots = pd_spots.sort_values(by='spots').reset_index(drop=True)
+    return spots_ft, pd_spots
 
 
 def filter_bleach_spots(log_pd: pd.DataFrame, analyze_organelle: str):
