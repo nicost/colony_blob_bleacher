@@ -87,10 +87,10 @@ DISPLAYS
 # PARAMETERS allow change
 # --------------------------
 # Please changes
-data_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/"\
-                "20210203_CBB_nucleoliArsAndHeatshockTreatment/data/WT1/C2-Site_0_1"
-save_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/"\
-                "20210203_CBB_nucleoliArsAndHeatshockTreatment/dataAnalysis1/WT1/C2-Site_0_1"
+data_path = "D:/Xiaowei/data/20210319_CBB_nucleoliFRAPexposureIntensityAndNonCentroidPhotobleachingTest/"\
+                "WT_random/C10-Site_7_1"
+save_path = "D:/Xiaowei/data/20210319_CBB_nucleoliFRAPexposureIntensityAndNonCentroidPhotobleachingTest/dataAnalysis1/"\
+                "WT_random/C10-Site_7_1"
 analyze_organelle = 'nucleoli'  # only accepts 'sg' or 'nucleoli'
 frap_start_delay = 6  # 50ms default = 4; 100ms default = 5; 200ms default = 6
 display_mode = 'Y'  # only accepts 'N' or 'Y'
@@ -236,15 +236,15 @@ print("### Image analysis: FRAP curve calculation ...")
 ctrl_organelle = ~organelle_pd.index.isin(log_pd['%s' % analyze_organelle].tolist())
 ctrl_x = organelle_pd[ctrl_organelle]['x'].astype(int).tolist()
 ctrl_y = organelle_pd[ctrl_organelle]['y'].astype(int).tolist()
-ctrl_spots = ana.analysis_mask(ctrl_x, ctrl_y, pix, num_dilation)
+ctrl_spots, ctrl_pd = ble.get_spots(ctrl_y, ctrl_x, pix, num_dilation)
+ctrl_pd.columns = ['x', 'y', 'ctrl_spots']
 num_ctrl_spots = obj.object_count(ctrl_spots)
 pointer_pd['num_ctrl_spots'] = [num_ctrl_spots] * len(pointer_pd)
 
 # get raw intensities for bleach spots and control spots
 pointer_pd['raw_int'] = ana.get_intensity(label(bleach_spots, connectivity=1), pixels_tseries)
-ctrl_spots_int_tseries = ana.get_intensity(label(ctrl_spots, connectivity=1), pixels_tseries)
-ctrl_pd = pd.DataFrame({'pos': [pos] * num_ctrl_spots, 'ctrl_spots': np.arange(0, num_ctrl_spots, 1),
-                        'x': ctrl_y, 'y': ctrl_x, 'raw_int': ctrl_spots_int_tseries})
+ctrl_pd['raw_int'] = ana.get_intensity(label(ctrl_spots, connectivity=1), pixels_tseries)
+ctrl_pd['pos'] = [pos] * num_ctrl_spots
 
 # link ctrl spots with corresponding organelle
 ctrl_pd['%s' % analyze_organelle] = obj.points_in_objects(label_organelle, ctrl_pd['x'], ctrl_pd['y'])
