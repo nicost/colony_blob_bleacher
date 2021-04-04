@@ -13,11 +13,12 @@ import shared.math_functions as mat
 import os
 
 # Please changes
-data_source = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/"\
-        "20210319_CBB_nucleoliFRAPexposureIntensityAndNonCentroidPhotobleachingTest/WT_centroid_GFP24-9973_100ms"
+# data_source folder ends with /
+data_source = "D:/Xiaowei/data/20210319_CBB_nucleoliFRAPexposureIntensityAndNonCentroidPhotobleachingTest/"\
+                "WT_random/"
 save_name = 'dataAnalysis'
 analyze_organelle = 'nucleoli'  # only accepts 'sg' or 'nucleoli'
-frap_start_delay = 5  # 50ms default = 4; 100ms default = 5; 200ms default = 6
+frap_start_delay = 4  # 50ms default = 4; 100ms default = 5; 200ms default = 6
 
 # values for analysis
 data_c = 0
@@ -58,7 +59,7 @@ for s in range(len(dirs)):
     mf_name = dirs[s].split('/')[-2]
     print("### DATA PROCESSING: %s (%d / %d)" % (folder, s+1, num_dir))
     data_path = dirs[s]
-    cut_length = len(mf_name) + 1
+    cut_length = len(mf_name) + 2  # folder ends with /
     save_path = ("%s/%s/%s/%s" % (data_source[:-cut_length], save_name, mf_name, folder))
     pos = dirs[s].split('/')[-1].split('_')[1]
     # pos = dirs[s].split('_')[-1]
@@ -177,15 +178,15 @@ for s in range(len(dirs)):
     ctrl_organelle = ~organelle_pd.index.isin(log_pd['%s' % analyze_organelle].tolist())
     ctrl_x = organelle_pd[ctrl_organelle]['x'].astype(int).tolist()
     ctrl_y = organelle_pd[ctrl_organelle]['y'].astype(int).tolist()
-    ctrl_spots = ana.analysis_mask(ctrl_x, ctrl_y, pix, num_dilation)
+    ctrl_spots, ctrl_pd = ble.get_spots(ctrl_y, ctrl_x, pix, num_dilation)
+    ctrl_pd.columns = ['x', 'y', 'ctrl_spots']
     num_ctrl_spots = obj.object_count(ctrl_spots)
     pointer_pd['num_ctrl_spots'] = [num_ctrl_spots] * len(pointer_pd)
 
     # get raw intensities for bleach spots and control spots
     pointer_pd['raw_int'] = ana.get_intensity(label(bleach_spots, connectivity=1), pixels_tseries)
-    ctrl_spots_int_tseries = ana.get_intensity(label(ctrl_spots, connectivity=1), pixels_tseries)
-    ctrl_pd = pd.DataFrame({'pos': [pos] * num_ctrl_spots, 'ctrl_spots': np.arange(0, num_ctrl_spots, 1),
-                            'x': ctrl_y, 'y': ctrl_x, 'raw_int': ctrl_spots_int_tseries})
+    ctrl_pd['raw_int'] = ana.get_intensity(label(ctrl_spots, connectivity=1), pixels_tseries)
+    ctrl_pd['pos'] = [pos] * num_ctrl_spots
 
     # link ctrl spots with corresponding organelle
     ctrl_pd['%s' % analyze_organelle] = obj.points_in_objects(label_organelle, ctrl_pd['x'], ctrl_pd['y'])
