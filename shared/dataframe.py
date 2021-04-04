@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import random
 
 
 """
@@ -266,7 +267,7 @@ def select_multiple(x_lst: list, y_lst: list, num):
     out_y = []
     out_x = []
     label_idx = range(len(y_lst))
-    rand_idx = np.random.choice(label_idx, num)
+    rand_idx = random.sample(label_idx, num)
     for i in range(len(rand_idx)):
         out_y.append(y_lst[rand_idx[i]])
         out_x.append(x_lst[rand_idx[i]])
