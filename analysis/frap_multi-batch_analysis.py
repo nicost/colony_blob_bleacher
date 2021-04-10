@@ -14,9 +14,9 @@ import os
 
 # Please changes
 # data_source folder ends with /
-multi_data_source = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/test/"
+multi_data_source = "D:/Xiaowei/data/20210407_SG_frap/data/"
 save_name = 'dataAnalysis'
-analyze_organelle = 'nucleoli'  # only accepts 'sg' or 'nucleoli'
+analyze_organelle = 'sg'  # only accepts 'sg' or 'nucleoli'
 frap_start_delay = 4  # 50ms default = 4; 100ms default = 5; 200ms default = 6
 
 # values for analysis
@@ -50,15 +50,11 @@ fitting_mode = 'single_exp'  # accepts 'single_exp', 'double_exp', 'soumpasis', 
 """
 
 multi_dirs = [x for x in os.listdir(multi_data_source)]
-multi_dirs.remove('.DS_Store')
+if '.DS_Store' in multi_dirs:
+    multi_dirs.remove('.DS_Store')
 
 for r in range(len(multi_dirs)):
-    data_source = ("%s/%s" % (multi_data_source, multi_dirs[r]))
-
-    # ----------------------------------------------------------------
-    # FROM HERE: THE SAME AS frap_batch_analysis.py
-    # ----------------------------------------------------------------
-
+    data_source = ("%s%s/" % (multi_data_source, multi_dirs[r]))
     dirs = [x[0] for x in os.walk(data_source)]
     dirs.pop(0)
     num_dir = len(dirs)
@@ -66,11 +62,12 @@ for r in range(len(multi_dirs)):
     for s in range(len(dirs)):
         folder = dirs[s].split('/')[-1]
         mf_name = dirs[s].split('/')[-2]
+        data_name = dirs[s].split('/')[-3]
         print("well: %s (%d / %d)" % (mf_name, r+1, len(multi_dirs)))
-        print("### DATA PROCESSING: %s (%d / %d)" % (folder, s+1, num_dir))
+        print("FOV: %s (%d / %d)" % (folder, s+1, num_dir))
         data_path = dirs[s]
-        cut_length = len(mf_name) + 2  # folder ends with /
-        save_path = ("%s/%s/%s/%s" % (data_source[:-cut_length], save_name, mf_name, folder))
+        cut_length = len(data_name) + 2  # folder ends with /
+        save_path = ("%s/%s/%s/%s" % (multi_data_source[:-cut_length], save_name, mf_name, folder))
         pos = dirs[s].split('/')[-1].split('_')[1]
         # pos = dirs[s].split('_')[-1]
 
