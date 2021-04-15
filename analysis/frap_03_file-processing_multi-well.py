@@ -3,7 +3,7 @@ import shared.dataframe as dat
 
 multi_data_source = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/"\
     "20210408_CBB_nucleoliFRAPscreen1/dataAnalysis/"
-save_path = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/"\
+save_source = "/Users/xiaoweiyan/Dropbox/LAB/ValeLab/Projects/Blob_bleacher/Data/"\
     "20210408_CBB_nucleoliFRAPscreen1/dataFiles/"
 
 analyze_organelle = 'nucleoli'  # only accepts 'sg' or 'nucleoli'
@@ -19,6 +19,7 @@ for r in range(len(multi_dirs)):
     num_dir = len(dirs)
     name = multi_dirs[r]
 
+    save_path = ("%s%s/" % (save_source, name))
     if not os.path.exists(save_path):
         os.makedirs(save_path)
 
