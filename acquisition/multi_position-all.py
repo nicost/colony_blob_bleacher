@@ -94,10 +94,7 @@ acquisition_channel = acquisition_channel_lst[0]
 prefix_channel = prefix_channel_lst[0]
 
 for idx in range(pos_list.get_number_of_positions()):
-    # Close DataViewer opened during previous run
-    dv = mm.displays().close_displays_for(ds)
     pos = pos_list.get_position(idx)
-    pos.go_to_position(pos, mmc)
 
     well_temp = pos.get_label().split('-')[0]
     if well_temp == well:
@@ -115,6 +112,10 @@ for idx in range(pos_list.get_number_of_positions()):
         channel_count = 0
         acquisition_channel = acquisition_channel_lst[0]
         prefix_channel = prefix_channel_lst[0]
+
+    # Close DataViewer opened during previous run
+    dv = mm.displays().close_displays_for(ds)
+    pos.go_to_position(pos, mmc)
 
     time.sleep(0.1)
     if count >= nr_between_projector_checks:
