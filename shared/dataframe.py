@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import random
 
 
 """
@@ -40,6 +41,10 @@ List related:
     remove_elements
         FUNCTION: remove elements in lst that does not exist in allowed_elements
         SYNTAX:   remove_elements(lst: list, allowed_elements: list)
+    
+    select_multiple
+        FUNCTION: select multiple points from corresponding x,y coordinate lists
+        SYNTAX:   select_multiple(x_lst: list, y_lst: list, num)
 
 uManager related:
 
@@ -145,9 +150,13 @@ def copy_based_on_index(dataframe1: pd.DataFrame, dataframe2: pd.DataFrame,
     value_lst = [[] for _ in range(len(column_lst1))]
 
     for i in dataframe1[index_name1]:
-        target = dataframe2[dataframe2[index_name2] == i].iloc[0]
-        for j in range(len(column_lst1)):
-            value_lst[j].append(target[column_lst2[j]])
+        if len(dataframe2[dataframe2[index_name2] == i]) == 1:
+            target = dataframe2[dataframe2[index_name2] == i].iloc[0]
+            for j in range(len(column_lst1)):
+                value_lst[j].append(target[column_lst2[j]])
+        else:
+            for j in range(len(column_lst1)):
+                value_lst[j].append('na')
     dataframe1 = add_columns(dataframe1, column_lst1, value_lst)
 
     return dataframe1
@@ -245,6 +254,24 @@ def remove_elements(lst: list, allowed_elements: list):
             out.append(lst[i])
     return out
 
+
+def select_multiple(x_lst: list, y_lst: list, num):
+    """
+    Select multiple points from corresponding x,y coordinate lists
+
+    :param x_lst: list, list of x coordinates
+    :param y_lst: list, list of y coordinates
+    :param num: number of points to be selected
+    :return:
+    """
+    out_y = []
+    out_x = []
+    label_idx = range(len(y_lst))
+    rand_idx = random.sample(label_idx, num)
+    for i in range(len(rand_idx)):
+        out_y.append(y_lst[rand_idx[i]])
+        out_x.append(x_lst[rand_idx[i]])
+    return out_x, out_y
 
 # ---------------------------------------------------------------------------------------------------
 # FUNCTIONS for UMANAGER

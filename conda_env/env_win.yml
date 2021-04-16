@@ -81,7 +81,6 @@ dependencies:
   - libwebp-base=1.1.0=h8ffe710_3
   - libzopfli=1.0.3=h0e60522_0
   - locket=0.2.0=py_2
-  - - ipython=7.19.0=py37heaed05f_0 oz4-c=1.9.2=h62dcd97_2
   - m2w64-gcc-libgfortran=5.3.0=6
   - m2w64-gcc-libs=5.3.0=7
   - m2w64-gcc-libs-core=5.3.0=7

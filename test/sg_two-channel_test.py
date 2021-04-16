@@ -87,7 +87,8 @@ for i in range(max_t+1):
     pix = np.reshape(temp.get_raw_pixels(), newshape=[temp.get_height(), temp.get_width()])
     temp1 = store.get_image(cb.t(i).c(data_c_sample).z(0).p(data_p).build())
     pix1 = np.reshape(temp1.get_raw_pixels(), newshape=[temp1.get_height(), temp1.get_width()])
-    _, sg = find_organelle(pix, thresholding, min_size=min_size, max_size=max_size)
+    sg = find_organelle(pix, thresholding, min_size=min_size, max_size=max_size)
+    # cell =
 
     pix_tseries.append(pix)
     pix1_tseries.append(pix1)
@@ -169,27 +170,3 @@ if display_mode == 'Y':
         viewer.add_image(mov1, name='sample-GFP', colormap='green', blending='additive')
         violet_woBg = Colormap([[0.0, 0.0, 0.0, 0.0], [129 / 255, 55 / 255, 114 / 255, 1.0]])
         viewer.add_image(mov_sg, name='SG', contrast_limits=[0, 1], colormap=('violet woBg', violet_woBg))
-
-        # matplotlib display
-        # ax1.plot(ana_pd['number'])
-        sns.violinplot(ax=ax1, x='frame', y='int_G3BP1', data=full_pd, notch=False)
-        # ax1.plot(ana_pd['int_G3BP1'])
-        ax1.set_xlabel('time (frame)')
-        ax1.set_ylabel('intensity (G3BP1)')
-
-        sns.violinplot(ax=ax2, x='frame', y='int_sample', data=full_pd, notch=False)
-        # ax2.plot(ana_pd['int_sample'])
-        ax2.set_xlabel('time (frame)')
-        ax2.set_ylabel('intensity (%s)' % name)
-
-        sns.violinplot(ax=ax3, x='frame', y='int_ratio', data=full_pd, notch=False)
-        # ax3.plot(ana_pd['int_ratio'])
-        ax3.set_xlabel('time (frame)')
-        ax3.set_ylabel('intensity ratio')
-
-        ax4.plot(ana_pd['number_norm'], label='number')
-        ax4.plot(ana_pd['int_G3BP1_norm'], label='G3BP1')
-        ax4.plot(ana_pd['int_sample_norm'], label=name)
-        ax4.legend()
-        ax4.set_xlabel('time (frame)')
-        ax4.set_ylabel('normalized')

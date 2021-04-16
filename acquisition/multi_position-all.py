@@ -2,20 +2,30 @@ import numpy as np
 import time
 from pycromanager import Bridge
 from skimage.measure import label, regionprops
+
 from shared.analysis import central_pixel_without_cells, bleach_location
 from shared.find_blobs import select_lst
-import shared.objects as obj
-import shared.dataframe as dat
 
 # variables
 from shared.find_organelles import find_organelle
+import shared.dataframe as dat
+import shared.objects as obj
+
+# SG FRAP analyzed with Photobleach-561-confocal
 
 nr = 40
 nr_between_projector_checks = 2
 cal_exposure = 200
 cal_offset = 5
 n_curve = 300
+organelle = 'sg'  # only accepts 'sg' or 'nucleoli'
 photobleaching_mode = 'random'  # only accepts 'random' or 'centroid'
+cell_detect_channel = "PhotoBleach-RFP-confocal"
+analyze_channel = "PhotoBleach-RFP-confocal"  # also used as reference channel
+analyze_save = 'Y'
+n_acquire_channel = 2
+acquisition_channel_lst = ["PhotoBleach-GFP-confocal", "PhotoBleach-RFP-confocal"]
+prefix_channel_lst = ['GFP', 'RFP']
 
 # build up pycromanager bridge
 bridge = Bridge()
@@ -38,6 +48,10 @@ def snap_and_get_bleach_location(exposure, cutoff):
     """
     p_exposure = projector_device.get_exposure()
     c_exposure = mmc.get_exposure()
+
+    # set analyze channel
+    mmc.set_config("Channels", cell_detect_channel)
+
     test_img = mm.live().snap(True).get(0)
     test_np_img = np.reshape(test_img.get_raw_pixels(), newshape=[test_img.get_height(), test_img.get_width()])
     location = central_pixel_without_cells(test_np_img)
@@ -73,22 +87,35 @@ pm = mm.positions()
 pos_list = pm.get_position_list()
 well = pos_list.get_position(0).get_label().split('-')[0]
 well_count = 0
+channel_count = 0
 ds = mm.data().create_ram_datastore()
 count = 0
+acquisition_channel = acquisition_channel_lst[0]
+prefix_channel = prefix_channel_lst[0]
 
 for idx in range(pos_list.get_number_of_positions()):
-    # Close DataViewer opened during previous run
-    dv = mm.displays().close_displays_for(ds)
     pos = pos_list.get_position(idx)
-    pos.go_to_position(pos, mmc)
 
     well_temp = pos.get_label().split('-')[0]
     if well_temp == well:
         if well_count >= n_curve:
-            continue
+            if channel_count == n_acquire_channel-1:
+                continue
+            else:
+                well_count = 0
+                channel_count += 1
+                acquisition_channel = acquisition_channel_lst[channel_count]
+                prefix_channel = prefix_channel_lst[channel_count]
     else:
         well_count = 0
         well = well_temp
+        channel_count = 0
+        acquisition_channel = acquisition_channel_lst[0]
+        prefix_channel = prefix_channel_lst[0]
+
+    # Close DataViewer opened during previous run
+    dv = mm.displays().close_displays_for(ds)
+    pos.go_to_position(pos, mmc)
 
     time.sleep(0.1)
     if count >= nr_between_projector_checks:
@@ -100,10 +127,18 @@ for idx in range(pos_list.get_number_of_positions()):
         if calibrated:
             continue
     count += 1
+
+    # set analyze channel
+    mmc.set_config("Channels", analyze_channel)
+
     img = mm.live().snap(False).get(0)
     pixels = np.reshape(img.get_raw_pixels(), newshape=[img.get_height(), img.get_width()])
     # find organelles using a combination of thresholding and watershed
-    _, segmented = find_organelle(pixels, 'local-nucleoli', 500, 200, 10, 1000)
+    if organelle == 'sg':
+        _, segmented = find_organelle(pixels, 'na', 500, 200, 5, 200)  # stress granule
+    else:
+        _, segmented = find_organelle(pixels, 'local-nucleoli', 500, 200, 10, 1000)  # nucleoli
+
     label_img = label(segmented)
     if photobleaching_mode == 'centroid':
         blobs = regionprops(label_img)
@@ -119,6 +154,20 @@ for idx in range(pos_list.get_number_of_positions()):
 
     if len(selected[0]) > (nr // 2):
         projector.enable_point_and_shoot_mode(True)
+
+        # acquisition of the single mScarlet image
+        # https://valelab4.ucsf.edu/~MM/doc-2.0.0-gamma/mmstudio/org/micromanager/acquisition/SequenceSettings.Builder.
+        # html#timeFirst-boolean-
+        if analyze_save == 'Y':
+            mmc.set_config("Channels", analyze_channel)
+            ssb1 = mm.acquisitions().get_acquisition_settings().copy_builder()
+            ssb1.num_frames(1)
+            ssb1.prefix('%s-ref' % pos.get_label())
+            mm.acquisitions().set_acquisition_settings(ssb1.build())
+            ds1 = mm.acquisitions().run_acquisition()
+            dv1 = mm.displays().close_displays_for(ds1)
+
+        # acquire FRAP movies
         ssb = mm.acquisitions().get_acquisition_settings().copy_builder()
         mm.acquisitions().set_acquisition_settings(ssb.prefix(pos.get_label()).build())
         ds = mm.acquisitions().run_acquisition_nonblocking()

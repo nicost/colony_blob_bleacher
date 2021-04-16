@@ -106,7 +106,7 @@ def find_organelle(pixels: np.array, global_thresholding='na', extreme_val=500, 
     organelle_filtered = remove_small(organelle_filtered, min_size)
     organelle_filtered = remove_large(organelle_filtered, max_size)
 
-    return organelle_filtered
+    return organelle, organelle_filtered
 
 
 def organelle_analysis(pixels: np.array, organelle: np.array, organelle_name: str, pos=0):
@@ -175,20 +175,21 @@ def find_nuclear_nucleoli(pixels: np.array):
     label_nuclear = obj.label_watershed(nuclear_fill, 1)
     # filter out:
     # 1) nuclear size < 1500
-    # 2) nuclear touches boundary
-    label_nuclear_ft = clear_border(label_nuclear)
-    label_nuclear_ft = obj.label_remove_small(label_nuclear_ft, 1500)
+    label_nuclear_ft = obj.label_remove_small(label_nuclear, 1500)
     label_nuclear_sort = obj.label_resort(label_nuclear_ft)
+    # 2) nuclear touches boundary
+    label_nuclear_exclude_boundary = clear_border(label_nuclear_sort)
+    label_nuclear_exclude_boundary_sort = obj.label_resort(label_nuclear_exclude_boundary)
 
-    return label_nuclear_sort
+    return label_nuclear_sort, label_nuclear_exclude_boundary_sort
 
 
-def nuclear_analysis(label_nuclear: np.array, nucleoli_pd: pd.DataFrame, pos=0):
+def nuclear_analysis(label_nuclear: np.array, organelle_pd: pd.DataFrame, pos=0):
     """
     Analyze nuclear properties and return a pd.DataFrame table
 
     :param label_nuclear: np.array, grey scale labeled nuclear image
-    :param nucleoli_pd: pd.DataFrame, nucleoli table
+    :param organelle_pd: pd.DataFrame, nucleoli table
     :param pos: FOV position
     :return: nuclear_pd: pd.DataFrame, nuclear table
     """
@@ -202,7 +203,7 @@ def nuclear_analysis(label_nuclear: np.array, nucleoli_pd: pd.DataFrame, pos=0):
 
     num_nucleoli = []
     for i in nuclear_pd['nuclear']:
-        nucleoli_pd_temp = nucleoli_pd[nucleoli_pd['nuclear'] == i].reset_index(drop=True)
+        nucleoli_pd_temp = organelle_pd[organelle_pd['nuclear'] == i].reset_index(drop=True)
         num_nucleoli.append(len(nucleoli_pd_temp))
 
     nuclear_pd['num_nucleoli'] = num_nucleoli

@@ -1,0 +1,17 @@
+name: blob_bleacher
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.7
+  - napari
+  - pyqt
+  - matplotlib
+  - pandas
+  - pip
+  - numpy
+  - scikit-image
+  - pip:
+    - pycromanager==0.12.7
+    - zmq==0.0.0
+prefix: C:\Users\NicoLocal\anaconda3\envs\napari

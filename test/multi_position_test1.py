@@ -1,21 +1,28 @@
 import numpy as np
+import random
 import time
 from pycromanager import Bridge
 from skimage.measure import label, regionprops
+
 from shared.analysis import central_pixel_without_cells, bleach_location
-from shared.find_blobs import select_lst
-import shared.objects as obj
-import shared.dataframe as dat
+from shared.find_blobs import select
 
 # variables
 from shared.find_organelles import find_organelle
+
+# SG FRAP analyzed with Photobleach-561-confocal
 
 nr = 40
 nr_between_projector_checks = 2
 cal_exposure = 200
 cal_offset = 5
 n_curve = 300
-photobleaching_mode = 'random'  # only accepts 'random' or 'centroid'
+organelle = 'sg'  # only accepts 'sg' or 'nucleoli'
+cell_detect_channel = "PhotoBleach-RFP-confocal"
+analyze_channel = "PhotoBleach-RFP-confocal"  # also used as reference channel
+n_acquire_channel = 2
+acquisition_channel_lst = ["PhotoBleach-GFP-confocal", "PhotoBleach-RFP-confocal"]
+prefix_channel_lst = ['GFP', 'RFP']
 
 # build up pycromanager bridge
 bridge = Bridge()
@@ -38,6 +45,10 @@ def snap_and_get_bleach_location(exposure, cutoff):
     """
     p_exposure = projector_device.get_exposure()
     c_exposure = mmc.get_exposure()
+
+    # set analyze channel
+    mmc.set_config("Channels", cell_detect_channel)
+
     test_img = mm.live().snap(True).get(0)
     test_np_img = np.reshape(test_img.get_raw_pixels(), newshape=[test_img.get_height(), test_img.get_width()])
     location = central_pixel_without_cells(test_np_img)
@@ -73,8 +84,11 @@ pm = mm.positions()
 pos_list = pm.get_position_list()
 well = pos_list.get_position(0).get_label().split('-')[0]
 well_count = 0
+channel_count = 0
 ds = mm.data().create_ram_datastore()
 count = 0
+acquisition_channel = acquisition_channel_lst[0]
+prefix_channel = prefix_channel_lst[0]
 
 for idx in range(pos_list.get_number_of_positions()):
     # Close DataViewer opened during previous run
@@ -85,10 +99,19 @@ for idx in range(pos_list.get_number_of_positions()):
     well_temp = pos.get_label().split('-')[0]
     if well_temp == well:
         if well_count >= n_curve:
-            continue
+            if channel_count == n_acquire_channel-1:
+                continue
+            else:
+                well_count = 0
+                channel_count += 1
+                acquisition_channel = acquisition_channel_lst[channel_count]
+                prefix_channel = prefix_channel_lst[channel_count]
     else:
         well_count = 0
         well = well_temp
+        channel_count = 0
+        acquisition_channel = acquisition_channel_lst[0]
+        prefix_channel = prefix_channel_lst[0]
 
     time.sleep(0.1)
     if count >= nr_between_projector_checks:
@@ -100,44 +123,60 @@ for idx in range(pos_list.get_number_of_positions()):
         if calibrated:
             continue
     count += 1
+
+    # set analyze channel
+    mmc.set_config("Channels", analyze_channel)
+
     img = mm.live().snap(False).get(0)
     pixels = np.reshape(img.get_raw_pixels(), newshape=[img.get_height(), img.get_width()])
     # find organelles using a combination of thresholding and watershed
-    _, segmented = find_organelle(pixels, 'local-nucleoli', 500, 200, 10, 1000)
-    label_img = label(segmented)
-    if photobleaching_mode == 'centroid':
-        blobs = regionprops(label_img)
-        centroid_x = [round(p.centroid[1]) for p in blobs]
-        centroid_y = [round(p.centroid[0]) for p in blobs]
-        selected = select_lst(centroid_x, centroid_y, img.get_width() / 10, 0.9 * img.get_width())
-    elif photobleaching_mode == 'random':
-        spots = obj.select_random_in_label(label_img, 1)
-        selected = select_lst(spots[0], spots[1], img.get_width() / 10, 0.9 * img.get_width())
+    if organelle == 'sg':
+        segmented = find_organelle(pixels, 'na', 500, 200, 5, 200)  # stress granule
     else:
-        raise TypeError("photobleaching_mode only accepts 'centroid' or 'random', get %s instead"
-                        % photobleaching_mode)
+        segmented = find_organelle(pixels, 'local-nucleoli', 500, 200, 10, 1000)  # nucleoli
+    label_img = label(segmented)
+    blobs = regionprops(label_img)
+    centered = select(blobs, 'centroid', img.get_width() / 10, 0.9 * img.get_width())
 
-    if len(selected[0]) > (nr // 2):
+    if len(centered) > (nr // 2):
         projector.enable_point_and_shoot_mode(True)
+
+        # acquisition of the single mScarlet image
+        # https://valelab4.ucsf.edu/~MM/doc-2.0.0-gamma/mmstudio/org/micromanager/acquisition/SequenceSettings.Builder.
+        # html#timeFirst-boolean-
+        mmc.set_config("Channels", analyze_channel)
+        ssb1 = mm.acquisitions().get_acquisition_settings().copy_builder()
+        ssb1.num_frames(1)
+        ssb1.prefix('%s-ref' % pos.get_label())
+        mm.acquisitions().set_acquisition_settings(ssb1.build())
+        ds1 = mm.acquisitions().run_acquisition()
+        dv1 = mm.displays().close_displays_for(ds1)
+
+        # acquire FRAP movies
+        mmc.set_config("Channels", acquisition_channel)
         ssb = mm.acquisitions().get_acquisition_settings().copy_builder()
-        mm.acquisitions().set_acquisition_settings(ssb.prefix(pos.get_label()).build())
+        ssb.num_frames(300)
+        ssb.prefix('%s-%s' % (pos.get_label(), prefix_channel))
+        mm.acquisitions().set_acquisition_settings(ssb.build())
         ds = mm.acquisitions().run_acquisition_nonblocking()
         # Trick to get timing right.  Wait for Core to report that Sequence is running
         while not mmc.is_sequence_running(mmc.get_camera_device()):
             time.sleep(0.1)
         time.sleep(1.5)
 
-        nr_shots = nr if len(selected[0]) >= (2 * nr) else int(len(selected[0]) / 2)
-        well_count += nr_shots
-        shots = dat.select_multiple(selected[0], selected[1], nr_shots)
-
-        for i in range(len(shots[0])):
-            # Note that MM has x-y coordinates, and Python uses row-column (equivalent to y-x)
-            projector.add_point_to_point_and_shoot_queue(shots[0][i], shots[1][i])
-            time.sleep(0.07)
-        print(pos.get_label(), ": Shots ", len(shots[0]))
-        while mmc.is_sequence_running(mmc.get_camera_device()):
-            time.sleep(0.5)
-        time.sleep(1)
+        for region_list in [centered]:
+            nr_shots = nr if len(region_list) >= (2 * nr) else int(len(region_list) / 2)
+            well_count += nr_shots
+            shots = random.sample(region_list, nr_shots)
+            # shots = region_list[0:10]
+            for shot in shots:
+                # Note that MM has x-y coordinates, and Python uses row-column (equivalent to y-x)
+                projector.add_point_to_point_and_shoot_queue(shot['centroid'][1], shot['centroid'][0])
+                # print(shot['centroid'][1], " ", shot['centroid'][0])
+                time.sleep(0.07)
+            print(pos.get_label(), ": Shots ", len(shots))
+            while mmc.is_sequence_running(mmc.get_camera_device()):
+                time.sleep(0.5)
+            time.sleep(1)
 
 print("Done!")

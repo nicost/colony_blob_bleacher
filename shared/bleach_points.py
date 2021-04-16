@@ -1,6 +1,7 @@
 import shared.dataframe as dat
 import shared.objects as obj
 import shared.analysis as ana
+import shared.math_functions as mat
 import collections
 from skimage.measure import label, regionprops
 import numpy as np
@@ -23,6 +24,10 @@ pd.DataFrame related:
         FUNCTION: generate bleach spots mask and corresponding pd.DataFrame table
         SYNTAX:   get_bleach_spots(log_pd: pd.DataFrame, label_nucleoli: np.array, num_dilation=3)
     
+    get_spots
+        FUNCTION: generate spots mask and corresponding pd.DataFrame table
+        SYNTAX:   get_spots(x_lst: list, y_lst: list, pixels_same_size: np.array, num_dilation=3)
+    
     filter_bleach_spots
         FUNCTION: filter bleach spots
         SYNTAX:   filter_bleach_spots(log_pd: pd.DataFrame)
@@ -34,6 +39,18 @@ pd.DataFrame related:
     frap_filter
         FUNCTION: filter FRAP curves
         SYNTAX:   frap_filter(pointer_pd: pd.DataFrame, f: str)
+    
+    filter_ctrl
+        FUNCTION: filter control spots for FRAP photobleaching correction
+        SYNTAX:   filter_ctrl(df: pd.DataFrame)
+    
+    frap_pb_correction
+        FUNCTION: photobleaching correction for FRAP
+        SYNTAX:   frap_pb_correction(pointer_pd: pd.DataFrame, ctrl_pd: pd.DataFrame)
+    
+    frap_curve_fitting
+        FUNCTION: FRAP curve fitting
+        SYNTAX:   frap_curve_fitting(pointer_pd: pd.DataFrame)
     
 """
 
@@ -71,9 +88,9 @@ def get_bleach_spots_coordinates(log_pd: pd.DataFrame, store, cb, data_c: int, m
     """
     if mode == 'single-raw':
         coordinate_pd = pd.DataFrame({'x': log_pd['aim_x'],
-                                  'y': log_pd['aim_y'],
-                                  'x_diff': [0] * len(log_pd),
-                                  'y_diff': [0] * len(log_pd)})
+                                      'y': log_pd['aim_y'],
+                                      'x_diff': [0] * len(log_pd),
+                                      'y_diff': [0] * len(log_pd)})
 
     elif mode == 'single-offset':
         x_lst = []
@@ -86,7 +103,11 @@ def get_bleach_spots_coordinates(log_pd: pd.DataFrame, store, cb, data_c: int, m
             # subtract minimum intensity image pix(bleach_frame+4) and image before photobleaching
             post = store.get_image(cb.p(0).z(0).c(data_c).t(bleach_frame+frap_start_delay).build())
             pix_post = np.reshape(post.get_raw_pixels(), newshape=[post.get_height(), post.get_width()])
-            pre = store.get_image(cb.p(0).z(0).c(data_c).t(bleach_frame).build())
+            if bleach_frame > 4:
+                pre_frame = bleach_frame-4
+            else:
+                pre_frame = 0
+            pre = store.get_image(cb.p(0).z(0).c(data_c).t(pre_frame).build())
             pix_pre = np.reshape(pre.get_raw_pixels(), newshape=[pre.get_height(), pre.get_width()])
             pix = pix_post - pix_pre + 100
 
@@ -141,7 +162,7 @@ def get_bleach_spots_coordinates(log_pd: pd.DataFrame, store, cb, data_c: int, m
     return coordinate_pd
 
 
-def get_bleach_spots(log_pd: pd.DataFrame, label_nucleoli: np.array, num_dilation=3):
+def get_bleach_spots(log_pd: pd.DataFrame, label_nucleoli: np.array, analyze_organelle: str, num_dilation=3):
     """
     Generate bleach spots mask and corresponding pd.DataFrame table
 
@@ -151,6 +172,7 @@ def get_bleach_spots(log_pd: pd.DataFrame, label_nucleoli: np.array, num_dilatio
                 'nucleoli': pointer corresponding nucleoli label index
                 originally imports from .log file
     :param label_nucleoli: np.array, grey scale labeled nucleoli image
+    :param analyze_organelle: str, 'sg' or 'nucleoli'
     :param num_dilation: int, optional (default: 3)
                 number of dilation applied from the coordinates
                 determines the size of the generated mask for each point
@@ -168,7 +190,7 @@ def get_bleach_spots(log_pd: pd.DataFrame, label_nucleoli: np.array, num_dilatio
     log_pd['bleach_spots'] = obj.points_in_objects(label_bleach_spots, log_pd['x'], log_pd['y'])
 
     # filter bleach spots
-    pointer_pd = filter_bleach_spots(log_pd)
+    pointer_pd = filter_bleach_spots(log_pd, analyze_organelle)
 
     # generate bleach spots mask (after filtering)
     bleach_spots_ft = ana.analysis_mask(pointer_pd['y'], pointer_pd['x'], label_nucleoli, num_dilation)
@@ -181,13 +203,42 @@ def get_bleach_spots(log_pd: pd.DataFrame, label_nucleoli: np.array, num_dilatio
     return bleach_spots_ft, pointer_pd
 
 
-def filter_bleach_spots(log_pd: pd.DataFrame):
+def get_spots(x_lst: list, y_lst: list, pixels_same_size: np.array, num_dilation=3):
+    """
+    Generate spots mask and corresponding pd.DataFrame table
+
+    :param x_lst: list, list of x coordinates
+    :param y_lst: list, list of y coordinates
+    :param pixels_same_size: np.array, any image of the same size
+    :param num_dilation: int, number of dilation applied, default: 3
+    :return:
+    """
+    spots = ana.analysis_mask(y_lst, x_lst, pixels_same_size, num_dilation)
+    label_spots = label(spots, connectivity=1)
+    pd_spots = pd.DataFrame({'x': x_lst, 'y': y_lst})
+    pd_spots['spots'] = obj.points_in_objects(label_spots, pd_spots['x'], pd_spots['y'])
+
+    # filter spots
+    pointer_same_spots = [item for item, count in collections.Counter(pd_spots['spots'].tolist()).items() if count > 1]
+    pd_spots = pd_spots[~pd_spots['spots'].isin(pointer_same_spots)]
+    del pd_spots['spots']  # delete previous bleach_spots information
+    pd_spots = pd_spots.reset_index(drop=True)  # reset index
+
+    spots_ft = ana.analysis_mask(pd_spots['y'], pd_spots['x'], pixels_same_size, num_dilation)
+    label_spots_ft = label(spots_ft, connectivity=1)
+    # link pointer with corresponding filtered bleach spots
+    pd_spots['spots'] = obj.points_in_objects(label_spots_ft, pd_spots['x'], pd_spots['y'])
+    pd_spots = pd_spots.sort_values(by='spots').reset_index(drop=True)
+    return spots_ft, pd_spots
+
+
+def filter_bleach_spots(log_pd: pd.DataFrame, analyze_organelle: str):
     """
     Filter bleach spots
 
     Filter out bleach spots:
-    1) aim outside of nucleoli
-    2) bleach the same nucleoli
+    1) aim outside of nucleoli (bleach_spots_check_organelle = 'Y')
+    2) bleach the same nucleoli (bleach_spots_check_organelle = 'Y')
     3) too close to merge as a single bleach spots
     4) (0,0)
     5) too far away from the aim point (>20 any direction)
@@ -195,40 +246,46 @@ def filter_bleach_spots(log_pd: pd.DataFrame):
     :param log_pd: pd.DataFrame, requires columns 'nucleoli', 'bleach_spots'
                 'nucleoli': corresponding nucleoli label index
                 'bleach_spots': corresponding bleach spots label index
+    :param analyze_organelle: str, 'sg' or 'nucleoli'
     :return: pointer_pd: pd.DataFrame
                 pointer dataframe of all filtered bleach spots
 
     """
     # mask2
-    pointer_target_same_nucleoli = \
-        [item for item, count in collections.Counter(log_pd['nucleoli'].tolist()).items() if count > 1]
+    pointer_target_same_organelle = \
+        [item for item, count in collections.Counter(log_pd['%s' % analyze_organelle].tolist()).items() if count > 1]
     # mask3
     pointer_same_analysis_spots = \
         [item for item, count in collections.Counter(log_pd['bleach_spots'].tolist()).items() if count > 1]
 
     # filter all the pointers from log to generate real pointer_pd
-    pointer_pd = log_pd[(log_pd['nucleoli'] > 0)
-                        & (~log_pd['nucleoli'].isin(pointer_target_same_nucleoli))
+    pointer_pd = log_pd[(log_pd['%s' % analyze_organelle] > 0)
+                        & (~log_pd['%s' % analyze_organelle].isin(pointer_target_same_organelle))
                         & (~log_pd['bleach_spots'].isin(pointer_same_analysis_spots))
                         & (log_pd['x'] != 0) & (log_pd['y'] != 0) & (np.abs(log_pd['x_diff']) <= 10)
                         & (np.abs(log_pd['y_diff'] <= 10))]
+
     del pointer_pd['bleach_spots']  # delete previous bleach_spots information
     pointer_pd = pointer_pd.reset_index(drop=True)  # reset index
 
     # print number of pointers failed to pass each filter
     # filters applied later will not count the ones that fail from the previous filters
-    num_filter1 = len(log_pd[(log_pd['nucleoli'] == 0)])
-    print("%d bleach spots aim outside of nucleoli." % num_filter1)
-    num_filter2 = len(log_pd[(log_pd['nucleoli'] > 0) & (log_pd['nucleoli'].isin(pointer_target_same_nucleoli))])
-    print("%d bleach spots aim to the same nucleoli." % num_filter2)
-    num_filter3 = len(log_pd[(log_pd['nucleoli'] > 0) & (~log_pd['nucleoli'].isin(pointer_target_same_nucleoli))
+    num_filter1 = len(log_pd[(log_pd['%s' % analyze_organelle] == 0)])
+    print("%d bleach spots aim outside of %s." % (num_filter1, analyze_organelle))
+    num_filter2 = len(log_pd[(log_pd['%s' % analyze_organelle] > 0)
+                             & (log_pd['%s' % analyze_organelle].isin(pointer_target_same_organelle))])
+    print("%d bleach spots aim to the same %s." % (num_filter2, analyze_organelle))
+    num_filter3 = len(log_pd[(log_pd['%s' % analyze_organelle] > 0)
+                             & (~log_pd['%s' % analyze_organelle].isin(pointer_target_same_organelle))
                              & (log_pd['bleach_spots'].isin(pointer_same_analysis_spots))])
     print("%d bleach spots aim too close." % num_filter3)
-    num_filter4 = len(log_pd[(log_pd['nucleoli'] > 0) & (~log_pd['nucleoli'].isin(pointer_target_same_nucleoli))
+    num_filter4 = len(log_pd[(log_pd['%s' % analyze_organelle] > 0)
+                             & (~log_pd['%s' % analyze_organelle].isin(pointer_target_same_organelle))
                              & (~log_pd['bleach_spots'].isin(pointer_same_analysis_spots))
                              & ((log_pd['x'] == 0) | (log_pd['y'] == 0))])
     print("%d bleach spots did not find." % num_filter4)
-    num_filter5 = len(log_pd[(log_pd['nucleoli'] > 0) & (~log_pd['nucleoli'].isin(pointer_target_same_nucleoli))
+    num_filter5 = len(log_pd[(log_pd['%s' % analyze_organelle] > 0)
+                             & (~log_pd['%s' % analyze_organelle].isin(pointer_target_same_organelle))
                              & (~log_pd['bleach_spots'].isin(pointer_same_analysis_spots))
                              & (log_pd['x'] != 0) & (log_pd['y'] != 0)
                              & ((np.abs(log_pd['x_diff']) > 10) | (np.abs(log_pd['y_diff']) > 10))])
@@ -440,3 +497,95 @@ def frap_filter(pointer_pd: pd.DataFrame, f: str):
             frap_flt.append(1)
 
     return frap_flt
+
+
+def filter_ctrl(df: pd.DataFrame):
+    """
+    Filter control spots for FRAP curve photobleaching correction
+    :param df: pd.DataFrame, control spots dataframe
+    :return: df_ft: pd.DataFrame, sorted control spots dataframe
+    """
+    flt_ctrl = []
+    for i in range(len(df)):
+        ctrl_int = df['bg_cor_int'][i]
+        if (max(ctrl_int) - min(ctrl_int)) / (max(ctrl_int) + 0.0001) > 0.4:
+            flt_ctrl.append(0)
+        else:
+            flt_ctrl.append(1)
+    df['filter'] = flt_ctrl
+    df_ft = df[df['filter'] == 1].reset_index()
+    return df_ft
+
+
+def frap_pb_correction(pointer_pd: pd.DataFrame, ctrl_pd: pd.DataFrame):
+    """
+    Photobleaching correction for FRAP
+    :param pointer_pd: pd.DataFrame, dataframe of all the bleach spots
+    :param ctrl_pd: pd.DataFrame, dataframe of control spots
+    :return:
+    """
+    # calculate photobleaching factor
+    pb_factor = ana.get_pb_factor(ctrl_pd['bg_cor_int'])
+
+    pointer_pd['pb_factor'] = [pb_factor] * len(pointer_pd)
+
+    # pb_factor fitting with single exponential decay
+    pb_fit = mat.fitting_single_exp_decay(np.arange(0, len(pb_factor), 1), pb_factor)
+    pointer_pd = dat.add_columns(pointer_pd, ['pb_single_exp_decay_fit', 'pb_single_exp_decay_r2',
+                                              'pb_single_exp_decay_a', 'pb_single_exp_decay_b',
+                                              'pb_single_exp_decay_c'],
+                                 [[pb_fit[0]] * len(pointer_pd), [pb_fit[1]] * len(pointer_pd),
+                                  [pb_fit[2]] * len(pointer_pd), [pb_fit[3]] * len(pointer_pd),
+                                  [pb_fit[4]] * len(pointer_pd)])
+
+    # photobleaching correction
+    if np.isnan(pb_fit[2]):
+        pb = pb_factor
+    else:
+        pb = pb_fit[0]
+    pointer_pd['mean_int'] = ana.pb_correction(pointer_pd['bg_cor_int'], pb)
+    return pointer_pd
+
+
+def frap_curve_fitting(pointer_pd: pd.DataFrame):
+    """
+    FRAP curve fitting
+    :param pointer_pd: pd.DataFrame, dataframe of all the bleach spots
+    :return:
+    """
+    # curve fitting with linear to determine initial slope
+    linear_fit_pd = mat.frap_fitting_linear(pointer_pd['real_time_post'], pointer_pd['int_curve_post_nor'])
+    pointer_pd = pd.concat([pointer_pd, linear_fit_pd], axis=1)
+
+    # curve fitting with single exponential function
+    single_exp_fit_pd = mat.frap_fitting_single_exp(pointer_pd['real_time_post'],
+                                                    pointer_pd['int_curve_post_nor'], pointer_pd['sigma'])
+    pointer_pd = pd.concat([pointer_pd, single_exp_fit_pd], axis=1)
+
+    # curve fitting with soumpasis function
+    soumpasis_fit_pd = mat.frap_fitting_soumpasis(pointer_pd['real_time_post'],
+                                                  pointer_pd['int_curve_post_nor'], pointer_pd['sigma'])
+    pointer_pd = pd.concat([pointer_pd, soumpasis_fit_pd], axis=1)
+
+    # curve fitting with double exponential function
+    double_exp_fit_pd = mat.frap_fitting_double_exp(pointer_pd['real_time_post'],
+                                                    pointer_pd['int_curve_post_nor'], pointer_pd['sigma'])
+    pointer_pd = pd.concat([pointer_pd, double_exp_fit_pd], axis=1)
+
+    # curve fitting with ellenberg function
+    ellenberg_fit_pd = mat.frap_fitting_ellenberg(pointer_pd['real_time_post'],
+                                                  pointer_pd['int_curve_post_nor'], pointer_pd['sigma'])
+    pointer_pd = pd.concat([pointer_pd, ellenberg_fit_pd], axis=1)
+
+    # find optimal fitting
+    optimal_fit_pd = mat.find_optimal_fitting(pointer_pd, ['single_exp', 'soumpasis', 'ellenberg', 'double_exp'])
+    pointer_pd = pd.concat([pointer_pd, optimal_fit_pd], axis=1)
+
+    # filter frap curves
+    pointer_pd['frap_filter_single_exp'] = frap_filter(pointer_pd, 'single_exp')
+    pointer_pd['frap_filter_soumpasis'] = frap_filter(pointer_pd, 'soumpasis')
+    pointer_pd['frap_filter_double_exp'] = frap_filter(pointer_pd, 'double_exp')
+    pointer_pd['frap_filter_ellenberg'] = frap_filter(pointer_pd, 'ellenberg')
+    pointer_pd['frap_filter_optimal'] = frap_filter(pointer_pd, 'optimal')
+
+    return pointer_pd
